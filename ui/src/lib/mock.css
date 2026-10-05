@@ -1,0 +1,37 @@
+/* Design-time desktop: a stand-in wallpaper, and a frame that clips like the native window. */
+html.mock body {
+  background:
+    radial-gradient(60% 50% at 30% 30%, #ffd66b 0 18%, transparent 19%),
+    radial-gradient(40% 30% at 75% 65%, #ffffff 0 20%, transparent 21%),
+    linear-gradient(160deg, #3bc3f0, #1fa4de 60%, #62d0f5);
+}
+
+html.mock.mock-night body {
+  background:
+    radial-gradient(70% 40% at 50% 110%, #2a5a9a 0 40%, transparent 41%),
+    radial-gradient(50% 30% at 80% 20%, #5b3a2a 0 20%, transparent 40%),
+    #07090d;
+}
+
+html.mock #app {
+  position: absolute;
+  left: 40px;
+  top: 40px;
+  width: var(--mock-w, 360px);
+  height: var(--mock-h, 320px);
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow: 0 18px 50px -12px rgba(0, 0, 0, 0.45);
+  transition:
+    width var(--mock-ms, 0ms) var(--ease-morph) var(--mock-delay, 0ms),
+    height var(--mock-ms, 0ms) var(--ease-morph) var(--mock-delay, 0ms);
+}
+
+html.mock[data-theme='aura'] #app {
+  backdrop-filter: blur(40px) saturate(1.25);
+  background: rgba(240, 244, 246, 0.08);
+}
+
+html.mock.mock-night[data-theme='aura'] #app {
+  background: rgba(20, 26, 32, 0.19);
+}

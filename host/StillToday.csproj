@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- .NET Framework 4.8 and the WebView2 runtime ship with Windows 10 and 11, so the installer carries
+       neither a runtime nor a browser: only this exe, the WebView2 SDK glue and the UI files. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>StillToday</AssemblyName>
+    <RootNamespace>StillToday</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>StillToday.ico</ApplicationIcon>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <Product>Still Today</Product>
+    <!-- The file description is the name Windows puts on the widget's notifications. -->
+    <AssemblyTitle>Still Today</AssemblyTitle>
+    <Version>0.2.3</Version>
+    <!-- Settings shows the version; a build hash after it means nothing to a tester. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Net.Http" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
+  </ItemGroup>
+  <!-- The built page (ui/dist, from `pnpm build`) ships beside the exe as ui\. -->
+  <ItemGroup>
+    <None Include="..\ui\dist\**\*" Link="ui\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="StillToday.ico" LogicalName="StillToday.ico" />
+    <EmbeddedResource Include="Chime.wav" LogicalName="Chime.wav" />
+  </ItemGroup>
+</Project>

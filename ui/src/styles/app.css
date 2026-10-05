@@ -1,0 +1,387 @@
+/* ---- tokens ------------------------------------------------------------------------------ */
+
+:root {
+  --font: 'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', system-ui, sans-serif;
+  --font-display: 'Segoe UI Variable Display', 'Segoe UI', 'Microsoft YaHei UI', system-ui, sans-serif;
+
+  /* The WPF release's motion, kept because it felt right. --ease-morph matches host/Motion.cs. */
+  --ease-morph: cubic-bezier(0.22, 0.8, 0.22, 1);
+  --ease-page: cubic-bezier(0.2, 0.75, 0.25, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.5, 0, 0.75, 0);
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --t-micro: 120ms;
+  --t-short: 180ms;
+  --t-page: 230ms;
+  --t-medium: 280ms;
+  --t-long: 440ms;
+
+  --radius-s: 6px;
+  --radius-m: 10px;
+  --radius-l: 14px;
+
+  /* How much of a Canvas course colour survives its lift toward white on a dark card. */
+  --course-keep: 100%;
+
+  color-scheme: light;
+}
+
+/* Porcelain */
+:root[data-theme='light'] {
+  --bg: #faf9f6;
+  --raised: #ffffff;
+  --ink: #252d29;
+  --muted: #727a72;
+  --faint: #a2a9a1;
+  --line: #e7e8e1;
+  --control: #eeefe9;
+  --control-hover: #e7e8e1;
+  --control-press: #dfe1d8;
+  --nav: #f3f3ee;
+  --pill: #e5ece3;
+  --accent: #416853;
+  --accent-ink: #ffffff;
+  --accent-soft: #e5ece3;
+  --warm: #a8743c;
+  --warm-soft: rgba(168, 116, 60, 0.12);
+  --danger: #b5452f;
+  --shadow-pop: 0 18px 40px -16px rgba(38, 52, 33, 0.3), 0 0 0 1px rgba(41, 58, 36, 0.07);
+  --sheen: none;
+  --edge: none;
+}
+
+/* Midnight: a cool charcoal rather than a tinted grey, lit faintly from the top, with translucent
+   white layers for controls so depth reads as light instead of as more grey. */
+:root[data-theme='dark'] {
+  --bg: #17191c;
+  --raised: #24272c;
+  --ink: #eceef1;
+  --muted: #9ba1a9;
+  --faint: #636971;
+  --line: rgba(255, 255, 255, 0.075);
+  --control: rgba(255, 255, 255, 0.055);
+  --control-hover: rgba(255, 255, 255, 0.09);
+  --control-press: rgba(255, 255, 255, 0.13);
+  --nav: rgba(0, 0, 0, 0.22);
+  --pill: rgba(255, 255, 255, 0.1);
+  --accent: #a3d4b4;
+  --accent-ink: #0e2417;
+  --accent-soft: rgba(163, 212, 180, 0.14);
+  --warm: #e6bb8c;
+  --warm-soft: rgba(230, 187, 140, 0.13);
+  --danger: #f29d8a;
+  --shadow-pop: 0 18px 44px -14px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --sheen:
+    radial-gradient(130% 70% at 20% -10%, rgba(163, 212, 180, 0.07), transparent 60%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 45%);
+  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --course-keep: 72%;
+  color-scheme: dark;
+}
+
+/* Aura: DWM blurs the desktop behind the window; the page lays one frosted scrim over it (computed
+   per wallpaper in lib/aura.ts) and a soft top sheen. Frosted-white controls, as in the WPF Glass. */
+:root[data-theme='aura'] {
+  --bg: transparent;
+  --raised: #f4f8fa;
+  --ink: #16232b;
+  --muted: #3a4952;
+  --faint: #5c6b74;
+  --line: rgba(36, 49, 58, 0.16);
+  --control: rgba(255, 255, 255, 0.5);
+  --control-hover: rgba(255, 255, 255, 0.68);
+  --control-press: rgba(255, 255, 255, 0.8);
+  --nav: rgba(255, 255, 255, 0.2);
+  --pill: rgba(255, 255, 255, 0.55);
+  --accent: #285c82;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(178, 212, 237, 0.7);
+  --warm: #8f5627;
+  --warm-soft: rgba(148, 91, 44, 0.14);
+  --danger: #a3301d;
+  --shadow-pop: 0 18px 40px -14px rgba(10, 30, 45, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.5);
+  --sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 42%);
+  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+/* Smoked glass over a dark wallpaper: controls are lighter layers of the glass, not darker ones,
+   and one ice accent replaces the saturated blue. */
+:root[data-theme='aura'][data-ink='light'] {
+  --raised: #1f2631;
+  --ink: #f3f6f9;
+  --muted: rgba(236, 242, 248, 0.78);
+  --faint: rgba(236, 242, 248, 0.5);
+  --line: rgba(255, 255, 255, 0.1);
+  --control: rgba(255, 255, 255, 0.085);
+  --control-hover: rgba(255, 255, 255, 0.13);
+  --control-press: rgba(255, 255, 255, 0.18);
+  --nav: rgba(4, 8, 14, 0.14);
+  --pill: rgba(255, 255, 255, 0.13);
+  --accent: #d3e6fb;
+  --accent-ink: #13212f;
+  --accent-soft: rgba(200, 225, 255, 0.15);
+  --warm: #f2cf9f;
+  --warm-soft: rgba(242, 207, 159, 0.14);
+  --danger: #ffb3a1;
+  --shadow-pop: 0 18px 44px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0) 40%);
+  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 0 0 1px rgba(255, 255, 255, 0.045);
+  --course-keep: 72%;
+  color-scheme: dark;
+}
+/* ---- base -------------------------------------------------------------------------------- */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+}
+
+body {
+  font: 13px/1.45 var(--font);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: default;
+}
+
+input,
+textarea {
+  user-select: text;
+}
+
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 2px;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/* Canvas course colours are picked against white, so a dark card lifts them toward white until a
+   dot or bar still shows. Where no course colour is set this is unset too, and each use falls back
+   to its own colour. */
+* {
+  --course-lit: color-mix(in oklab, var(--course) var(--course-keep), white);
+}
+
+/* A course's Canvas colour, beside its code. */
+.course-dot {
+  display: inline-block;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--course-lit, var(--faint));
+  vertical-align: middle;
+  transition: background-color var(--t-medium);
+}
+
+.ellipsis {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Overlay-style scrollbars that stay out of the way until the pointer is over the list. */
+.scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.scroll::-webkit-scrollbar {
+  width: 10px;
+}
+
+.scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scroll::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 10px;
+  background-clip: padding-box;
+  background-color: transparent;
+  transition: background-color var(--t-short);
+}
+
+.scroll:hover::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--ink) 22%, transparent);
+}
+
+.scroll::-webkit-scrollbar-thumb:active {
+  background-color: color-mix(in srgb, var(--ink) 38%, transparent);
+}
+
+/* ---- shared controls --------------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 11px;
+  font-weight: 600;
+  transition:
+    transform var(--t-short) var(--ease-out),
+    background-color var(--t-micro),
+    filter var(--t-micro),
+    opacity var(--t-short);
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+}
+
+.btn.primary {
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+
+.btn.primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.btn.quiet {
+  background: var(--control);
+}
+
+.btn.quiet:hover:not(:disabled) {
+  background: var(--control-hover);
+}
+
+.form {
+  display: grid;
+  gap: 14px;
+  padding: 4px 22px 16px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.input {
+  width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--control);
+  font-size: 13.5px;
+  transition:
+    background-color var(--t-micro),
+    box-shadow var(--t-short);
+}
+
+textarea.input {
+  height: auto;
+  min-height: 84px;
+  padding: 9px 12px;
+  resize: none;
+  line-height: 1.5;
+}
+
+.input:hover {
+  background: var(--control-hover);
+}
+
+.input:focus {
+  background: var(--control-hover);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+/* A field shows focus with its own ring, not with the outline around controls as well. */
+.input:focus-visible {
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--faint);
+}
+
+.input.big {
+  height: 42px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.hint {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.hint.error {
+  color: var(--danger);
+}
+
+.actions-bar {
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px 16px;
+}
+
+.actions-bar .btn {
+  flex: 1;
+}
+
+.actions-bar .btn.primary {
+  flex: 1.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --t-micro: 0ms;
+    --t-short: 0ms;
+    --t-medium: 0ms;
+    --t-long: 0ms;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0ms !important;
+    transition-duration: 0ms !important;
+  }
+}
