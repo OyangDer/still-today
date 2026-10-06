@@ -139,16 +139,19 @@ pub fn watch_wake(_app: &AppHandle) {}
 pub fn autostart(app: &AppHandle, on: Option<bool>) -> bool {
     use tauri_plugin_autostart::ManagerExt;
     let launcher = app.autolaunch();
-    match on {
-        Some(true) => {
-            let _ = launcher.enable();
-        }
-        Some(false) => {
-            let _ = launcher.disable();
-        }
-        None => {}
+    let result = match on {
+        Some(true) => launcher.enable(),
+        Some(false) => launcher.disable(),
+        None => Ok(()),
+    };
+    // The Settings switch shows where it ended up; why it did not move goes to the log.
+    if let Err(e) = result {
+        eprintln!("autostart {on:?}: {e}");
     }
-    launcher.is_enabled().unwrap_or(false)
+    launcher.is_enabled().unwrap_or_else(|e| {
+        eprintln!("autostart state: {e}");
+        false
+    })
 }
 
 // Not on the Windows trial build: it would register the debug build to start with Windows.

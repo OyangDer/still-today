@@ -16,8 +16,9 @@ import time
 MAC = sys.platform == "darwin"
 SHOTS = sys.argv[1] if len(sys.argv) > 1 else "check-shots"
 STORE = os.path.expanduser("~/Library/Application Support/app.stilltoday.widget") if MAC else os.environ.get("STORE", "")
-# NSWindowLevel: below normal for a desktop widget, floating when kept on top.
-BELOW, FLOATING = -1, 3
+# NSWindowLevel: below normal for a desktop widget, above normal when kept on top (tao sets 5, the
+# status level, not floating's 3; anything above 0 keeps it over other windows).
+BELOW, NORMAL = -1, 0
 CAN_JOIN_ALL_SPACES = 1
 MARGIN, STEP = 20, 24
 
@@ -158,7 +159,9 @@ if MAC:
     check(state["behavior"] & CAN_JOIN_ALL_SPACES != 0, "on every Space", f"behavior {state['behavior']}")
 check(boot.get("platform") == ("macos" if MAC else "windows") and boot.get("morph") is True, "boot reports the platform and the morph switch")
 
-# Morph: Calendar is wide; the viewport, which is the window, passes through sizes on the way.
+# Morph: Calendar is wide; the viewport, which is the window, passes through sizes on the way. With
+# Reduce Motion on it jumps there at once, as it should.
+reduced = probe.js("return matchMedia('(prefers-reduced-motion: reduce)').matches")
 frames = probe.js("""
 document.querySelectorAll('[role=tab]')[2].click();
 const seen = [], end = performance.now() + 900;
@@ -166,8 +169,8 @@ while (performance.now() < end) { seen.push(`${innerWidth}x${innerHeight}`); awa
 return [...new Set(seen)];
 """)
 after = probe.native("state")
-check(len(frames) > 5 and frames[-1] == "440x600" and near(after["w"], 440) and near(after["h"], 600),
-      "morph to 440x600 in steps", f"{len(frames)} sizes: {' '.join(frames[:4])} … {frames[-1]}")
+check((len(frames) == 2 if reduced else len(frames) > 5) and frames[-1] == "440x600" and near(after["w"], 440) and near(after["h"], 600),
+      "morph to 440x600 at once (Reduce Motion)" if reduced else "morph to 440x600 in steps", f"{len(frames)} sizes: {' '.join(frames[:4])} … {frames[-1]}")
 probe.js("document.querySelectorAll('[role=tab]')[0].click();")
 time.sleep(0.9)
 
@@ -191,7 +194,7 @@ probe.call("topmost", {"on": False})
 time.sleep(0.4)
 under = probe.native("state")["level"]
 if MAC:
-    check(top == FLOATING and under == BELOW, "keep on top and back", f"levels {top} → {under}")
+    check(top > NORMAL and under == BELOW, "keep on top and back", f"levels {top} → {under}")
 
 # Waking from sleep reaches the page.
 probe.js("window.__wakes = 0; await window.__TAURI__.event.listen('host', e => { if (e.payload.ev === 'wake') window.__wakes++; });")
@@ -210,7 +213,7 @@ if MAC:
     content = open(next(iter(added))).read() if added else ""
     off = probe.call("autostart", {"on": False})
     check(on is True and off is False and len(added) == 1 and "--autostart" in content and not (agents() - had),
-          "open at login adds and removes a LaunchAgent", f"{[os.path.basename(a) for a in added]}")
+          "open at login adds and removes a LaunchAgent", f"on {on}, off {off}, {[os.path.basename(a) for a in added]}")
 
 # The morph switch is kept.
 probe.call("morph.set", {"on": False})
