@@ -1,0 +1,74 @@
+# Builds the Mac app on a Mac runner: a universal .dmg (Apple silicon and Intel) and screenshots of
+# the widget on a real macOS desktop, both kept as run artifacts. Nothing is published.
+name: Mac build
+
+on:
+  push:
+    branches: [mac]
+    paths: [mac/**, ui/**, host/Chime.wav, .github/workflows/mac.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dmg:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+
+      - name: Page
+        working-directory: ui
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm check
+          pnpm test
+          pnpm build
+
+      - name: Rust targets
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: mac
+
+      - name: Host tests
+        working-directory: mac
+        run: cargo test
+
+      - name: Universal app and .dmg
+        working-directory: mac
+        run: npx --yes @tauri-apps/cli@2 build --target universal-apple-darwin
+
+      # First run puts the widget in the top-right corner of the main display.
+      - name: Screenshots
+        run: |
+          mkdir shots
+          open "mac/target/universal-apple-darwin/release/bundle/macos/Still Today.app"
+          sleep 10
+          screencapture -x shots/light.png
+          if osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to true'; then
+            sleep 4
+            screencapture -x shots/dark.png
+          fi
+          sw_vers > shots/system.txt
+          lipo -archs "mac/target/universal-apple-darwin/release/bundle/macos/Still Today.app/Contents/MacOS/"* >> shots/system.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: still-today-mac-dmg
+          path: mac/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: shots/
