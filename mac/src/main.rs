@@ -2,31 +2,32 @@
 // command, `bridge`, with the same method names and payloads as host/Bridge.cs, and hears back on
 // one event, `host`, carrying the same `{ev, d}` messages.
 //
-// M1: the store, secrets, Canvas, feeds, the focus timer, the chime and outside links. The Mac shell
-// (material, topmost, menu bar, notifications, autostart) comes in M2; until then those answer null.
+// What the Mac has no counterpart for answers null: the legacy import, and the wallpaper sampling
+// that tints Aura (phase 2).
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod http;
 mod secrets;
+mod shell;
+mod widget;
 
 use std::fs;
-use std::io::{Cursor, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
 use tauri::async_runtime::JoinHandle;
-use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, State, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow, WindowEvent};
 use tauri_plugin_opener::OpenerExt;
 use url::Url;
 
-// Keep in step with host/Placement.cs.
-const MARGIN: f64 = 20.0;
 const CHIME: &[u8] = include_bytes!("../../host/Chime.wav");
 
-struct Host {
+pub struct Host {
     dir: PathBuf,
+    widget: widget::Widget,
     // The focus timer's end is kept here, not in the page: a hidden page throttles its timers, and
     // the chime has to land on the second.
     alarm: Mutex<Option<JoinHandle<()>>>,
@@ -54,7 +55,7 @@ fn read_or_null(path: &Path) -> Value {
 
 // Write-then-replace, as host/Store.cs: the new bytes reach the disk before the swap, and with a
 // `backup` path the version replaced stays there.
-fn write_atomic(path: &Path, content: &str, backup: Option<&Path>) -> std::io::Result<()> {
+pub fn write_atomic(path: &Path, content: &str, backup: Option<&Path>) -> std::io::Result<()> {
     let mut temp = path.as_os_str().to_owned();
     temp.push(".tmp");
     let temp = PathBuf::from(temp);
@@ -68,7 +69,7 @@ fn write_atomic(path: &Path, content: &str, backup: Option<&Path>) -> std::io::R
     fs::rename(&temp, path)
 }
 
-fn emit(app: &AppHandle, ev: &str, d: Value) {
+pub fn emit(app: &AppHandle, ev: &str, d: Value) {
     let _ = app.emit_to("main", "host", json!({ "ev": ev, "d": d }));
 }
 
@@ -79,43 +80,45 @@ fn boot(app: &AppHandle, host: &Host) -> Result<Value, String> {
         "data": read_or_null(&host.data()),
         "backup": read_or_null(&host.backup()),
         "legacy": false,
-        "autostart": false,
+        "autostart": shell::autostart(app, None),
         "canvasHost": secrets::canvas()?.map(|(host, _)| host),
         "canvasAvatar": read_or_null(&host.avatar()),
-        "glass": true,
+        "glass": widget::glass(),
         "platform": std::env::consts::OS,
+        "morph": host.widget.morph.load(std::sync::atomic::Ordering::Relaxed),
     }))
 }
 
-fn size_of(p: &Value) -> Result<LogicalSize<f64>, String> {
-    let w = p["width"].as_f64().ok_or("size")?;
-    let h = p["height"].as_f64().ok_or("size")?;
-    Ok(LogicalSize::new(w, h))
+fn size_of(p: &Value) -> Result<(f64, f64), String> {
+    Ok((p["width"].as_f64().ok_or("size")?, p["height"].as_f64().ok_or("size")?))
 }
 
 fn str_of<'a>(p: &'a Value, key: &str) -> Result<&'a str, String> {
     p[key].as_str().ok_or_else(|| key.to_string())
 }
 
-// First show: the primary monitor's top-right corner, as host/Placement.cs does with no saved spot.
-fn place(window: &WebviewWindow, size: LogicalSize<f64>) -> tauri::Result<()> {
-    if let Some(monitor) = window.primary_monitor()? {
-        let scale = monitor.scale_factor();
-        let area = monitor.work_area();
-        let left = area.position.x as f64 / scale;
-        let top = area.position.y as f64 / scale;
-        let width = area.size.width as f64 / scale;
-        window.set_position(LogicalPosition::new(left + width - size.width - MARGIN, top + MARGIN))?;
+#[cfg(target_os = "macos")]
+fn chime(app: &AppHandle) {
+    use objc2::rc::Retained;
+    use objc2::AllocAnyThread;
+    use objc2_app_kit::NSSound;
+    use objc2_foundation::NSData;
+    thread_local! {
+        // A sound stops when it is released, so the latest is held until the next.
+        static PLAYING: std::cell::RefCell<Option<Retained<NSSound>>> = const { std::cell::RefCell::new(None) };
     }
-    Ok(())
+    let _ = app.run_on_main_thread(|| {
+        let data = NSData::with_bytes(CHIME);
+        if let Some(sound) = NSSound::initWithData(NSSound::alloc(), &data) {
+            sound.play();
+            PLAYING.with(|p| *p.borrow_mut() = Some(sound));
+        }
+    });
 }
 
-// Window calls go through the main thread, where the windowing system expects them.
-fn on_main(app: &AppHandle, f: impl FnOnce() + Send + 'static) -> Result<(), String> {
-    app.run_on_main_thread(f).map_err(|_| "host".into())
-}
-
-fn chime() {
+#[cfg(not(target_os = "macos"))]
+fn chime(_app: &AppHandle) {
+    use std::io::Cursor;
     std::thread::spawn(|| {
         let Ok((_stream, output)) = rodio::OutputStream::try_default() else { return };
         let Ok(sink) = rodio::Sink::try_new(&output) else { return };
@@ -125,7 +128,7 @@ fn chime() {
     });
 }
 
-fn set_alarm(app: &AppHandle, host: &Host, at: Option<i64>) {
+fn set_alarm(app: &AppHandle, host: &Host, at: Option<i64>, title: Option<String>, body: Option<String>) {
     let mut alarm = host.alarm.lock().unwrap();
     if let Some(old) = alarm.take() {
         old.abort();
@@ -136,8 +139,11 @@ fn set_alarm(app: &AppHandle, host: &Host, at: Option<i64>) {
     let app = app.clone();
     *alarm = Some(tauri::async_runtime::spawn(async move {
         tokio::time::sleep(due).await;
-        chime();
-        // M2: a notification when the widget is hidden, as host/Bridge.cs does.
+        chime(&app);
+        let hidden = app.get_webview_window("main").is_some_and(|w| !w.is_visible().unwrap_or(false));
+        if let (true, Some(title)) = (hidden, title) {
+            shell::notify(&app, title, body.unwrap_or_default(), "focus".into());
+        }
         emit(&app, "alarm", Value::Null);
     }));
 }
@@ -249,26 +255,19 @@ async fn bridge(app: AppHandle, window: WebviewWindow, host: State<'_, Host>, m:
     match m.as_str() {
         "boot" => boot(&app, &host),
         "ready" => {
-            let size = size_of(&p)?;
-            on_main(&app, move || {
-                let _ = window.set_size(size);
-                let _ = place(&window, size);
-                let _ = window.show();
-            })?;
+            let (w, h) = size_of(&p)?;
+            widget::reveal(&app, window, w, h);
             Ok(Value::Null)
         }
-        // M1 jumps to the new size; the eased morph comes in M2.
         "morph" => {
-            let size = size_of(&p)?;
-            on_main(&app, move || {
-                let _ = window.set_size(size);
-            })?;
+            let (w, h) = size_of(&p)?;
+            let start = p["start"].as_f64().ok_or("start")?;
+            let ms = p["ms"].as_f64().ok_or("ms")?;
+            widget::morph(&app, window, w, h, start, ms);
             Ok(Value::Null)
         }
         "drag" => {
-            on_main(&app, move || {
-                let _ = window.start_dragging();
-            })?;
+            widget::drag(&app, window);
             Ok(Value::Null)
         }
         "save" => {
@@ -278,9 +277,7 @@ async fn bridge(app: AppHandle, window: WebviewWindow, host: State<'_, Host>, m:
             Ok(Value::Null)
         }
         "hide" => {
-            on_main(&app, move || {
-                let _ = window.hide();
-            })?;
+            let _ = window.hide();
             emit(&app, "hidden", Value::Null);
             Ok(Value::Null)
         }
@@ -296,11 +293,12 @@ async fn bridge(app: AppHandle, window: WebviewWindow, host: State<'_, Host>, m:
         }
         "legacy" => Ok(Value::Null),
         "alarm" => {
-            set_alarm(&app, &host, p["at"].as_f64().map(|at| at as i64));
+            let text = |key: &str| p[key].as_str().map(String::from);
+            set_alarm(&app, &host, p["at"].as_f64().map(|at| at as i64), text("title"), text("body"));
             Ok(Value::Null)
         }
         "chime" => {
-            chime();
+            chime(&app);
             Ok(Value::Null)
         }
         "canvas.connect" => canvas_connect(str_of(&p, "host")?, str_of(&p, "token")?).await,
@@ -318,11 +316,29 @@ async fn bridge(app: AppHandle, window: WebviewWindow, host: State<'_, Host>, m:
             secrets::delete(&secrets::feed(str_of(&p, "id")?));
             Ok(Value::Null)
         }
-        // The Mac shell, M2.
-        "autostart" => Ok(Value::Bool(false)),
-        "material" | "topmost" | "tray" | "notify" => {
-            #[cfg(debug_assertions)]
-            eprintln!("bridge: {m} comes in M2");
+        "material" => {
+            let (aura, dark) = (p["aura"].as_bool().unwrap_or(true), p["dark"].as_bool().unwrap_or(false));
+            let target = window.clone();
+            let _ = window.run_on_main_thread(move || widget::material(&target, aura, dark));
+            Ok(Value::Null)
+        }
+        "topmost" => {
+            widget::set_topmost(&app, window, p["on"].as_bool().unwrap_or(false));
+            Ok(Value::Null)
+        }
+        "autostart" => Ok(Value::Bool(shell::autostart(&app, p["on"].as_bool()))),
+        "tray" => {
+            shell::labels(&app, &p["labels"]);
+            Ok(Value::Null)
+        }
+        "notify" => {
+            shell::notify(&app, str_of(&p, "title")?.into(), str_of(&p, "body")?.into(), str_of(&p, "tag")?.into());
+            Ok(Value::Null)
+        }
+        // The beta's switch between an eased and an instant size change.
+        "morph.set" => {
+            host.widget.morph.store(p["on"].as_bool().unwrap_or(true), std::sync::atomic::Ordering::Relaxed);
+            host.widget.save();
             Ok(Value::Null)
         }
         _ => Err("method".into()),
@@ -339,14 +355,42 @@ fn own_page(url: &Url) -> bool {
 }
 
 fn main() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
+        // A second launch brings the running widget forward instead of starting another.
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            if let Some(window) = app.get_webview_window("main") {
+                widget::present(app, &window);
+                emit(app, "shown", Value::Null);
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri::plugin::Builder::<tauri::Wry>::new("guard").on_navigation(|_, url| own_page(url)).build())
+        .plugin(tauri::plugin::Builder::<tauri::Wry>::new("guard").on_navigation(|_, url| own_page(url)).build());
+    #[cfg(target_os = "macos")]
+    let builder = builder.plugin(tauri_plugin_autostart::init(
+        tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+        Some(vec!["--autostart"]),
+    ));
+    builder
+        .manage(shell::Items::default())
         .setup(|app| {
+            // A menu bar app: no Dock icon, no app menu.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             let dir = app.path().app_local_data_dir()?;
             fs::create_dir_all(&dir)?;
-            app.manage(Host { dir, alarm: Mutex::new(None), saving: Mutex::new(()) });
+            let widget = widget::Widget::load(&dir);
+            app.manage(Host { dir, widget, alarm: Mutex::new(None), saving: Mutex::new(()) });
+            if let Some(window) = app.get_webview_window("main") {
+                widget::dress(&window);
+            }
+            shell::menu_bar(app.handle())?;
+            shell::init_notifications(app.handle());
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let (WindowEvent::Focused(false), Some(webview)) = (event, window.app_handle().get_webview_window(window.label())) {
+                widget::blurred(window.app_handle(), &webview);
+            }
         })
         .invoke_handler(tauri::generate_handler![bridge])
         .run(tauri::generate_context!())

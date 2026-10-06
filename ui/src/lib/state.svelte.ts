@@ -65,6 +65,10 @@ class Store {
   /** Whether Windows blurs behind the widget; Aura stands in for the blur when it does not. */
   glass = $state(true);
   autostart = $state(false);
+  /** Running in the Mac host, which words a few things its own way. */
+  mac = $state(false);
+  /** Whether the window eases between sizes; null where the host has no switch for it. */
+  morph = $state<boolean | null>(null);
   /** The Canvas profile picture (data: URL); Settings shows initials without one. */
   canvasAvatar = $state<string | null>(null);
   visible = $state(true);
@@ -95,6 +99,8 @@ class Store {
     this.autostart = info.autostart;
     this.canvasAvatar = info.canvasAvatar;
     this.glass = info.glass;
+    this.mac = info.platform === 'macos';
+    this.morph = info.morph ?? null;
     const lang: Lang = info.locale.toLowerCase().startsWith('zh') ? 'zh' : 'en';
     // A save cut short can leave the file unreadable; the one before it then stands in. Only when
     // there was never a file is this a first run.
@@ -254,6 +260,11 @@ class Store {
   setLocked(on: boolean): void {
     this.data.settings.locked = on;
     this.persist();
+  }
+
+  setMorph(on: boolean): void {
+    this.morph = on;
+    void call('morph.set', { on });
   }
 
   async setAutostart(on: boolean): Promise<void> {

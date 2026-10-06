@@ -68,7 +68,7 @@
     const size = target;
     if (!current.w || (size.w === current.w && size.h === current.h)) return;
     current = size;
-    const ms = isReduced() ? 0 : MORPH_MS;
+    const ms = isReduced() || app.morph === false ? 0 : MORPH_MS;
     const start = Date.now() + LEAD_MS;
     void call('morph', { width: size.w, height: size.h, start, ms });
     frame = { ...size, start, ms };

@@ -30,6 +30,8 @@ export interface BootInfo {
   glass: boolean;
   /** The OS as Rust names it ("macos", "windows"); only the Tauri host sends it. */
   platform?: string;
+  /** Whether the window eases between sizes; only the Tauri host offers the switch. */
+  morph?: boolean;
 }
 
 export interface AuraSample {
@@ -65,6 +67,8 @@ function dispatch(message: { id?: number; ok?: boolean; r?: unknown; e?: string;
 
 webview?.addEventListener('message', (e) => dispatch(e.data as Parameters<typeof dispatch>[0]));
 void tauri?.event.listen('host', (e) => dispatch(e.payload as Parameters<typeof dispatch>[0]));
+// WKWebView has its own context menu (Reload among it), which the WebView2 host turns off natively.
+if (tauri) addEventListener('contextmenu', (e) => e.preventDefault());
 
 let mock: ((m: string, p: Record<string, unknown>) => Promise<unknown>) | null = null;
 

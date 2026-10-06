@@ -163,7 +163,7 @@
             onclick={() => {
               menu = false;
               void call('hide');
-            }}>{t('menu.hide')}</button
+            }}>{t(app.mac ? 'menu.hide.mac' : 'menu.hide')}</button
           >
         </div>
       {/if}

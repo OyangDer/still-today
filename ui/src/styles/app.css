@@ -1,8 +1,8 @@
 /* ---- tokens ------------------------------------------------------------------------------ */
 
 :root {
-  --font: 'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', system-ui, sans-serif;
-  --font-display: 'Segoe UI Variable Display', 'Segoe UI', 'Microsoft YaHei UI', system-ui, sans-serif;
+  --font: 'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', -apple-system, BlinkMacSystemFont, 'PingFang SC', system-ui, sans-serif;
+  --font-display: 'Segoe UI Variable Display', 'Segoe UI', 'Microsoft YaHei UI', -apple-system, BlinkMacSystemFont, 'PingFang SC', system-ui, sans-serif;
 
   /* The WPF release's motion, kept because it felt right. --ease-morph matches host/Motion.cs. */
   --ease-morph: cubic-bezier(0.22, 0.8, 0.22, 1);

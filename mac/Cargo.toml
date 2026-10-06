@@ -8,10 +8,11 @@ publish = false
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["macos-private-api"] }
+tauri = { version = "2", features = ["macos-private-api", "tray-icon", "image-png"] }
 serde_json = "1"
 sys-locale = "0.3"
 tauri-plugin-opener = "2"
+tauri-plugin-single-instance = "2"
 # Secrets: the macOS Keychain (Credential Manager when trying the build on Windows).
 keyring = { version = "3", features = ["apple-native", "windows-native"] }
 reqwest = { version = "0.12", features = ["gzip", "deflate"] }
@@ -19,7 +20,19 @@ url = "2"
 uuid = { version = "1", features = ["v4"] }
 base64 = "0.22"
 tokio = { version = "1", features = ["time"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+tauri-plugin-autostart = "2"
+mac-notification-sys = "0.6"
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSView", "NSResponder", "NSEvent", "NSWorkspace", "NSSound", "objc2-quartz-core"] }
+objc2-foundation = { version = "0.3", features = ["NSData"] }
+objc2-quartz-core = { version = "0.3", features = ["CALayer"] }
+
+# Only for trying the build on Windows: the chime, and whether the mouse is still down after a drag.
+[target.'cfg(windows)'.dependencies]
 rodio = { version = "0.20", default-features = false, features = ["wav"] }
+windows-sys = { version = "0.59", features = ["Win32_UI_Input_KeyboardAndMouse"] }
 
 [features]
 # Release builds serve the bundled ui/dist; debug builds without it load devUrl when one is set.

@@ -20,14 +20,23 @@
         "transparent": true,
         "shadow": false,
         "skipTaskbar": true,
-        "visible": false
+        "visible": false,
+        "acceptFirstMouse": true
       }
     ]
   },
   "bundle": {
     "active": true,
-    "targets": ["dmg", "app"],
-    "icon": ["icons/icon.ico"],
-    "macOS": { "minimumSystemVersion": "13.0" }
+    "targets": [
+      "dmg",
+      "app"
+    ],
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "13.0"
+    }
   }
 }

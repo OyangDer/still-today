@@ -343,7 +343,7 @@
             <dt>{t('feeds.timetable')}</dt>
             <dd>{t('feeds.timetableHow')}</dd>
           </dl>
-          <p class="hint">{t('feeds.private')}</p>
+          <p class="hint">{t(app.mac ? 'feeds.private.mac' : 'feeds.private')}</p>
         </div>
       {/if}
       {#each app.data.feeds as feed (feed.id)}
@@ -379,9 +379,12 @@
     <section>
       <h3>{t('settings.general')}</h3>
       <div class="toggles">
-        <Toggle checked={app.autostart} label={t('settings.autostart')} onchange={(v) => void app.setAutostart(v)} />
+        <Toggle checked={app.autostart} label={t(app.mac ? 'settings.autostart.mac' : 'settings.autostart')} onchange={(v) => void app.setAutostart(v)} />
         <Toggle checked={app.data.settings.topmost} label={t('settings.topmost')} onchange={(v) => app.setTopmost(v)} />
         <Toggle checked={app.data.settings.locked} label={t('settings.locked')} onchange={(v) => app.setLocked(v)} />
+        {#if app.morph !== null}
+          <Toggle checked={app.morph} label={t('settings.morph')} onchange={(v) => app.setMorph(v)} />
+        {/if}
       </div>
     </section>
 
