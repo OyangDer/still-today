@@ -38,6 +38,8 @@ windows-sys = { version = "0.59", features = ["Win32_UI_Input_KeyboardAndMouse"]
 [features]
 # Release builds serve the bundled ui/dist; debug builds without it load devUrl when one is set.
 custom-protocol = ["tauri/custom-protocol"]
+# The CI check's remote control (src/probe.rs). Never in a build anyone installs.
+probe = []
 
 [profile.release]
 lto = true

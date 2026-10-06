@@ -7,6 +7,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod http;
+#[cfg(feature = "probe")]
+mod probe;
 mod secrets;
 mod shell;
 mod widget;
@@ -341,6 +343,11 @@ async fn bridge(app: AppHandle, window: WebviewWindow, host: State<'_, Host>, m:
             host.widget.save();
             Ok(Value::Null)
         }
+        #[cfg(feature = "probe")]
+        "probe.reply" => {
+            probe::reply(&app, &p);
+            Ok(Value::Null)
+        }
         _ => Err("method".into()),
     }
 }
@@ -386,6 +393,8 @@ fn main() {
             shell::menu_bar(app.handle())?;
             shell::init_notifications(app.handle());
             shell::watch_wake(app.handle());
+            #[cfg(feature = "probe")]
+            probe::start(app.handle());
             Ok(())
         })
         .on_window_event(|window, event| {

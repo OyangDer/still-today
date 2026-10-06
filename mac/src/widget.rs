@@ -282,7 +282,7 @@ pub fn drag(app: &AppHandle, window: WebviewWindow) {
     });
 }
 
-fn settle(app: &AppHandle, window: WebviewWindow) {
+pub(crate) fn settle(app: &AppHandle, window: WebviewWindow) {
     let state = widget(app);
     let Some(from) = current(&window) else { return };
     let (w, h) = *state.size.lock().unwrap();

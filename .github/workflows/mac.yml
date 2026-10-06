@@ -5,7 +5,7 @@ name: Mac build
 on:
   push:
     branches: [mac]
-    paths: [mac/**, ui/**, host/Chime.wav, .github/workflows/mac.yml]
+    paths: [mac/**, ui/**, host/Chime.wav, .github/workflows/mac.yml, .github/mac-check/**]
   workflow_dispatch:
 
 permissions:
@@ -71,6 +71,20 @@ jobs:
         with:
           name: still-today-mac-dmg
           path: mac/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+      # The same checks the Windows trial build gets over CDP, through a build with the test probe.
+      - name: Mac check
+        run: |
+          osascript -e 'quit app "Still Today"' || true
+          pkill -f "Still Today.app/Contents/MacOS/" || true
+          osascript -e 'tell application "Finder" to close every window' || true
+          osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to false' || true
+          sleep 2
+          rm -rf ~/Library/"Application Support"/app.stilltoday.widget
+          cd mac
+          cargo build --features probe
+          ./target/debug/still-today > ../shots/probe.log 2>&1 &
+          python3 ../.github/mac-check/check.py ../shots/check
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
