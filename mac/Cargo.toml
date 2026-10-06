@@ -1,0 +1,22 @@
+[package]
+name = "still-today"
+version = "0.2.3"
+edition = "2021"
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["macos-private-api"] }
+serde_json = "1"
+sys-locale = "0.3"
+
+[features]
+# Release builds serve the bundled ui/dist; debug builds without it load devUrl when one is set.
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

@@ -1,5 +1,6 @@
-// The page's side of host/Bridge.cs. Outside the WebView (plain browser during design work) a mock
-// host stands in, so every screen can be built and inspected without the native shell.
+// The page's side of host/Bridge.cs, and of mac/src/main.rs under Tauri. Outside either host (plain
+// browser during design work) a mock host stands in, so every screen can be built and inspected
+// without the native shell.
 
 type Listener = (data: unknown) => void;
 
@@ -27,6 +28,8 @@ export interface BootInfo {
   canvasAvatar: string | null;
   /** Whether Windows blurs behind the widget; energy saver and the Transparency switch stop it. */
   glass: boolean;
+  /** The OS as Rust names it ("macos", "windows"); only the Tauri host sends it. */
+  platform?: string;
 }
 
 export interface AuraSample {
@@ -35,8 +38,15 @@ export interface AuraSample {
   brightest: string;
 }
 
+// Tauri's global API (withGlobalTauri): the Mac host answers one command and speaks on one event.
+interface Tauri {
+  core: { invoke(cmd: string, args: Record<string, unknown>): Promise<unknown> };
+  event: { listen(name: string, fn: (e: { payload: unknown }) => void): Promise<unknown> };
+}
+
 const webview = (window as unknown as { chrome?: { webview?: WebView } }).chrome?.webview;
-export const inHost = webview !== undefined;
+const tauri = (window as unknown as { __TAURI__?: Tauri }).__TAURI__;
+export const inHost = webview !== undefined || tauri !== undefined;
 
 const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
 const listeners = new Map<string, Set<Listener>>();
@@ -54,10 +64,17 @@ function dispatch(message: { id?: number; ok?: boolean; r?: unknown; e?: string;
 }
 
 webview?.addEventListener('message', (e) => dispatch(e.data as Parameters<typeof dispatch>[0]));
+void tauri?.event.listen('host', (e) => dispatch(e.payload as Parameters<typeof dispatch>[0]));
 
 let mock: ((m: string, p: Record<string, unknown>) => Promise<unknown>) | null = null;
 
 export async function call<T = void>(m: string, p: Record<string, unknown> = {}): Promise<T> {
+  if (tauri) {
+    // Errors arrive as the bare code string, the same `e` the WebView2 host sends.
+    return tauri.core.invoke('bridge', { m, p }).catch((e: unknown) => {
+      throw new Error(String(e));
+    }) as Promise<T>;
+  }
   if (!webview) {
     if (!import.meta.env.DEV) throw new Error('Still Today runs inside its host');
     mock ??= (await import('./mock')).createMock((ev, d) => dispatch({ ev, d }));
