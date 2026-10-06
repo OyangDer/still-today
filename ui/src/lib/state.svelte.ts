@@ -512,17 +512,21 @@ class Store {
     this.data.canvas.courses = Object.fromEntries(list.map((c) => [c.id, c.code]));
     const courses = list.map((c) => ({ ...c, code: this.data.settings.courseNames[c.id] || c.code }));
     const now = new Date();
-    // Canvas still taking the token after the day it was to expire means that day was a guess: only a
-    // student's token is capped at 120 days, and anyone who has also taught can make one that never expires.
-    if (this.data.canvas.tokenExpires && this.data.canvas.tokenExpires < dayKey(now)) this.data.canvas.tokenExpires = null;
-    const [pass, events, announcements, colors, avatar] = await Promise.all([
+    const [pass, events, announcements, colors, avatar, token] = await Promise.all([
       fetchAssignments(api, courses),
       profile ? fetchEvents(api, courses, profile.id, addDays(now, -FEED_PAST_DAYS), addDays(now, FEED_FUTURE_DAYS)) : null,
       fetchAnnouncements(api, courses, addDays(now, -ANNOUNCEMENT_DAYS)),
       fetchColors(api),
       // A picture the host will not fetch (one kept on another domain, say) leaves the last one.
       profile ? call<string | null>('canvas.avatar', { url: profile.avatar }).catch(() => undefined) : undefined,
+      call<HttpReply>('canvas.token'),
     ]);
+    // The expiry chosen in Canvas when the token was made. Where Canvas will not say, the date the user
+    // typed stands, unless Canvas still takes the token after it: then the date was wrong.
+    if (token.status === 200 && token.body) {
+      const { expires_at } = JSON.parse(token.body) as { expires_at: string | null };
+      Object.assign(this.data.canvas, { tokenExpires: expires_at ? dayKey(new Date(expires_at)) : null, tokenExpiresFromCanvas: true });
+    } else if (this.data.canvas.tokenExpires && this.data.canvas.tokenExpires < dayKey(now)) this.data.canvas.tokenExpires = null;
     const graded = mergeAssignments(this.data, pass.items, pass.complete, now);
     if (events) this.data.canvasEvents = events;
     let news: Announcement[] = [];
@@ -672,10 +676,9 @@ class Store {
     if (reply.status === 401 || reply.status === 403) return 'rejected';
     if (reply.status !== 200 || !reply.body) return 'offline';
     const user = JSON.parse(reply.body) as { name?: string };
-    // The same Canvas with a new token keeps what was synced from it. Canvas has capped a student's
-    // token at 120 days since October 2025, and the guide asks for the latest date it allows.
+    // The same Canvas with a new token keeps what was synced from it; the sync that follows reads the new token's expiry.
     if (this.data.canvas.host && this.data.canvas.host !== host) this.forgetCanvas();
-    Object.assign(this.data.canvas, { host, user: user.name ?? null, error: null, tokenExpires: dayKey(addDays(this.now, 120)) });
+    Object.assign(this.data.canvas, { host, user: user.name ?? null, error: null, tokenExpires: null, tokenExpiresFromCanvas: false });
     this.persist();
     void this.sync();
     return 'ok';
@@ -708,7 +711,7 @@ class Store {
   async disconnectCanvas(): Promise<void> {
     await call('canvas.disconnect');
     this.canvasAvatar = null;
-    Object.assign(this.data.canvas, { host: null, user: null, lastSync: null, error: null, tokenExpires: null });
+    Object.assign(this.data.canvas, { host: null, user: null, lastSync: null, error: null, tokenExpires: null, tokenExpiresFromCanvas: false });
     this.forgetCanvas();
     this.persist();
   }

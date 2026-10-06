@@ -3,7 +3,7 @@
   import { schoolSearches, type School } from '../lib/canvas';
   import { call } from '../lib/host';
   import { app, normalizeHost } from '../lib/state.svelte';
-  import { monthDay, t, timeOrDate } from '../lib/i18n';
+  import { monthDay, t, timeOrDate, weekdayShort } from '../lib/i18n';
   import { dayKey, fromDayKey, hhmm, parseIso } from '../lib/time';
   import { slide } from 'svelte/transition';
   import { easeOut, fade, isReduced, move } from '../lib/motion';
@@ -231,20 +231,26 @@
         {/if}
         <div class="line">
           <span>{t('canvas.expires')}</span>
-          <div class="expires">
-            <DateField
-              bind:value={
-                () => (app.data.canvas.tokenExpires ? fromDayKey(app.data.canvas.tokenExpires) : null),
-                (d) => {
-                  app.data.canvas.tokenExpires = d ? dayKey(d) : null;
-                  app.persist();
+          {#if app.data.canvas.tokenExpiresFromCanvas}
+            {@const expires = app.data.canvas.tokenExpires ? fromDayKey(app.data.canvas.tokenExpires) : null}
+            <span>{expires ? `${monthDay(expires)} ${weekdayShort(expires)}` : t('canvas.expiresNever')}</span>
+          {:else}
+            <div class="expires">
+              <DateField
+                bind:value={
+                  () => (app.data.canvas.tokenExpires ? fromDayKey(app.data.canvas.tokenExpires) : null),
+                  (d) => {
+                    app.data.canvas.tokenExpires = d ? dayKey(d) : null;
+                    app.persist();
+                  }
                 }
-              }
-              placeholder={t('canvas.expiresNone')}
-              clearable
-            />
-          </div>
+                placeholder={t('canvas.expiresNone')}
+                clearable
+              />
+            </div>
+          {/if}
         </div>
+        {#if !app.data.canvas.tokenExpiresFromCanvas && !app.data.canvas.tokenExpires}<p class="hint">{t('canvas.expiresAsk')}</p>{/if}
         <div class="toggles">
           <Toggle
             checked={app.data.settings.notifications}
