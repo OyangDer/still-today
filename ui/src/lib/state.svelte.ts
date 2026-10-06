@@ -100,6 +100,8 @@ class Store {
     this.canvasAvatar = info.canvasAvatar;
     this.glass = info.glass;
     this.mac = info.platform === 'macos';
+    // Styles that only the Mac's fonts need key off this.
+    if (this.mac) document.documentElement.dataset.os = 'mac';
     this.morph = info.morph ?? null;
     const lang: Lang = info.locale.toLowerCase().startsWith('zh') ? 'zh' : 'en';
     // A save cut short can leave the file unreadable; the one before it then stands in. Only when

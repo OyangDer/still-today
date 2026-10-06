@@ -236,6 +236,12 @@
     font-variation-settings: 'wght' 270;
   }
 
+  /* SF's figures run wider than Segoe's; at 72px the date beside them is pushed out of the card. */
+  :global([data-os='mac']) .clock {
+    font-size: 60px;
+    letter-spacing: -2px;
+  }
+
   .slot {
     display: inline-grid;
     overflow: hidden;
@@ -260,12 +266,16 @@
 
   .date {
     display: grid;
+    min-width: 0;
     justify-items: end;
     gap: 3px;
     padding-bottom: 6px;
   }
 
   .day {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-size: 14px;
     font-weight: 650;
     white-space: nowrap;
