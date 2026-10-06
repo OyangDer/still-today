@@ -204,16 +204,16 @@ wakes = probe.js("return window.__wakes")
 if MAC:
     check(wakes == 1, "a wake reaches the page", f"{wakes} wake event(s)")
 
-# Open at login: a LaunchAgent appears, and goes again.
+# Open at login: a first run turns it on (state.svelte.ts), Settings turns it off and on again.
 if MAC:
-    agents = lambda: set(glob.glob(os.path.expanduser("~/Library/LaunchAgents/*.plist")))
-    had = agents()
-    on = probe.call("autostart", {"on": True})
-    added = agents() - had
-    content = open(next(iter(added))).read() if added else ""
+    plist = os.path.expanduser("~/Library/LaunchAgents/Still Today.plist")
+    first = os.path.exists(plist)
     off = probe.call("autostart", {"on": False})
-    check(on is True and off is False and len(added) == 1 and "--autostart" in content and not (agents() - had),
-          "open at login adds and removes a LaunchAgent", f"on {on}, off {off}, {[os.path.basename(a) for a in added]}")
+    gone = not os.path.exists(plist)
+    on = probe.call("autostart", {"on": True})
+    content = open(plist).read() if os.path.exists(plist) else ""
+    check(first and off is False and gone and on is True and "--autostart" in content and "still-today" in content,
+          "open at login: on after first run, off and on again", f"first {first}, off {off}, removed {gone}, on {on}")
 
 # The morph switch is kept.
 probe.call("morph.set", {"on": False})
