@@ -24,9 +24,10 @@ tokio = { version = "1", features = ["time"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri-plugin-autostart = "2"
 mac-notification-sys = "0.6"
+block2 = "0.6"
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSView", "NSResponder", "NSEvent", "NSWorkspace", "NSSound", "objc2-quartz-core"] }
-objc2-foundation = { version = "0.3", features = ["NSData"] }
+objc2-foundation = { version = "0.3", features = ["NSData", "NSNotification", "NSOperation", "NSString", "block2"] }
 objc2-quartz-core = { version = "0.3", features = ["CALayer"] }
 
 # Only for trying the build on Windows: the chime, and whether the mouse is still down after a drag.

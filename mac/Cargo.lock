@@ -4002,6 +4002,7 @@ name = "still-today"
 version = "0.2.3"
 dependencies = [
  "base64 0.22.1",
+ "block2",
  "keyring",
  "mac-notification-sys",
  "objc2",

@@ -109,6 +109,32 @@ pub fn init_notifications(app: &AppHandle) {
 #[cfg(not(target_os = "macos"))]
 pub fn init_notifications(_app: &AppHandle) {}
 
+/// After sleep the page refreshes what went stale, as on Windows after a resume.
+#[cfg(target_os = "macos")]
+pub fn watch_wake(app: &AppHandle) {
+    use block2::RcBlock;
+    use objc2_app_kit::{NSWorkspace, NSWorkspaceDidWakeNotification};
+    use objc2_foundation::{NSNotification, NSOperationQueue};
+    let app = app.clone();
+    let block = RcBlock::new(move |_: std::ptr::NonNull<NSNotification>| emit(&app, "wake", Value::Null));
+    // SAFETY: the name is AppKit's constant, there is no sender to match, and the block runs on the
+    // main queue.
+    let observer = unsafe {
+        NSWorkspace::sharedWorkspace().notificationCenter().addObserverForName_object_queue_usingBlock(
+            Some(NSWorkspaceDidWakeNotification),
+            None,
+            Some(&NSOperationQueue::mainQueue()),
+            &block,
+        )
+    };
+    // Kept for the life of the app.
+    std::mem::forget(observer);
+}
+
+// The Windows trial build is checked against the WebView2 host, which has its own resume event.
+#[cfg(not(target_os = "macos"))]
+pub fn watch_wake(_app: &AppHandle) {}
+
 #[cfg(target_os = "macos")]
 pub fn autostart(app: &AppHandle, on: Option<bool>) -> bool {
     use tauri_plugin_autostart::ManagerExt;

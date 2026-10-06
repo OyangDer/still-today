@@ -385,6 +385,7 @@ fn main() {
             }
             shell::menu_bar(app.handle())?;
             shell::init_notifications(app.handle());
+            shell::watch_wake(app.handle());
             Ok(())
         })
         .on_window_event(|window, event| {
