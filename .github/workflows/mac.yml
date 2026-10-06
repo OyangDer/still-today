@@ -60,6 +60,10 @@ jobs:
             sleep 4
             screencapture -x shots/dark.png
           fi
+          # The app icon as Finder shows it.
+          open -R "mac/target/universal-apple-darwin/release/bundle/macos/Still Today.app"
+          sleep 4
+          screencapture -x shots/finder.png
           sw_vers > shots/system.txt
           lipo -archs "mac/target/universal-apple-darwin/release/bundle/macos/Still Today.app/Contents/MacOS/"* >> shots/system.txt
 
