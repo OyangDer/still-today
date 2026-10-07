@@ -89,8 +89,8 @@ jobs:
           ./target/debug/still-today > ../shots/probe.log 2>&1 &
           failed=0
           python3 ../.github/mac-check/check.py ../shots/check || { cat ../shots/probe.log; failed=1; }
-          # The Aura material comparison, over a colourful wallpaper. Not a check.
-          python3 ../.github/mac-check/materials.py ../shots/materials || true
+          # Liquid Glass as the tab bar's selection pill, recorded. Not a check.
+          python3 ../.github/mac-check/pill.py ../shots/pill || true
           exit $failed
 
       - uses: actions/upload-artifact@v4

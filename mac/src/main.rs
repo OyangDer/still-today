@@ -348,6 +348,11 @@ async fn bridge(app: AppHandle, window: WebviewWindow, host: State<'_, Host>, m:
             probe::reply(&app, &p);
             Ok(Value::Null)
         }
+        #[cfg(feature = "probe")]
+        "probe.pill" => {
+            probe::place_pill(&window, p);
+            Ok(Value::Null)
+        }
         _ => Err("method".into()),
     }
 }
