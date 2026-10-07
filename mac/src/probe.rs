@@ -79,12 +79,10 @@ fn handle(app: &AppHandle, request: &Value) -> Value {
         // Another material behind the page, for the comparison sheet; the page's next theme change
         // puts its own back.
         Some("material") => {
-            let (name, target) = (request["name"].as_str().unwrap_or("").to_string(), window.clone());
-            let dark = request["dark"].as_bool().unwrap_or(false);
+            let (request, target) = (request.clone(), window.clone());
             let (tx, rx) = mpsc::channel();
             let _ = window.run_on_main_thread(move || {
-                let _ = target.set_theme(Some(if dark { tauri::Theme::Dark } else { tauri::Theme::Light }));
-                let _ = tx.send(material(&target, &name));
+                let _ = tx.send(material(&target, &request));
             });
             rx.recv_timeout(Duration::from_secs(5)).unwrap_or(json!({ "error": "timeout" }))
         }
@@ -148,10 +146,24 @@ fn level(_window: &WebviewWindow) -> (Value, Value) {
     (Value::Null, Value::Null)
 }
 
+// {name, dark?, radius?, tint?: [r, g, b, a]}: the material, the window's appearance, the corner
+// radius it is clipped to, and Liquid Glass's tint.
 #[cfg(target_os = "macos")]
-fn material(window: &WebviewWindow, name: &str) -> Value {
+fn material(window: &WebviewWindow, request: &Value) -> Value {
+    use objc2_app_kit::NSWindow;
     use tauri::window::{Effect, EffectState, EffectsBuilder};
     use window_vibrancy::{apply_liquid_glass, clear_liquid_glass, LiquidGlassOptions, NSGlassEffectViewStyle};
+    let name = request["name"].as_str().unwrap_or("");
+    let radius = request["radius"].as_f64().unwrap_or(widget::RADIUS);
+    let dark = request["dark"].as_bool().unwrap_or(false);
+    let _ = window.set_theme(Some(if dark { tauri::Theme::Dark } else { tauri::Theme::Light }));
+    if let Ok(ns) = window.ns_window() {
+        // SAFETY: as in widget::dress.
+        let ns = unsafe { &*(ns as *const NSWindow) };
+        if let Some(layer) = ns.contentView().and_then(|v| v.layer()) {
+            layer.setCornerRadius(radius);
+        }
+    }
     let _ = clear_liquid_glass(window);
     let _ = window.set_effects(None);
     let glass = match name {
@@ -160,7 +172,12 @@ fn material(window: &WebviewWindow, name: &str) -> Value {
         _ => None,
     };
     if let Some(style) = glass {
-        return match apply_liquid_glass(window, LiquidGlassOptions::new(style).radius(widget::RADIUS)) {
+        let mut options = LiquidGlassOptions::new(style).radius(radius);
+        if let Some(t) = request["tint"].as_array().filter(|t| t.len() == 4) {
+            let c = |i: usize| t[i].as_u64().unwrap_or(0).min(255) as u8;
+            options = options.tint_color((c(0), c(1), c(2), c(3)));
+        }
+        return match apply_liquid_glass(window, options) {
             Ok(()) => json!({ "ok": true }),
             Err(e) => json!({ "error": e.to_string() }),
         };
@@ -175,14 +192,14 @@ fn material(window: &WebviewWindow, name: &str) -> Value {
         "fullscreen" => Effect::FullScreenUI,
         _ => return json!({ "error": "material" }),
     };
-    match window.set_effects(EffectsBuilder::new().effect(effect).state(EffectState::Active).radius(widget::RADIUS).build()) {
+    match window.set_effects(EffectsBuilder::new().effect(effect).state(EffectState::Active).radius(radius).build()) {
         Ok(()) => json!({ "ok": true }),
         Err(e) => json!({ "error": e.to_string() }),
     }
 }
 
 #[cfg(not(target_os = "macos"))]
-fn material(_window: &WebviewWindow, _name: &str) -> Value {
+fn material(_window: &WebviewWindow, _request: &Value) -> Value {
     json!({ "error": "mac only" })
 }
 

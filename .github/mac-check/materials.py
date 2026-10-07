@@ -1,5 +1,5 @@
-"""Screenshots of the widget over a colourful wallpaper in each Mac material, light and dark, for
-choosing the Aura glass. Runs after check.py against the same probe build; nothing here is checked.
+"""Screenshots of the widget in Liquid Glass variants, light and dark, over one of the Mac's own
+wallpapers and over a hard-edged one that shows the glass bending what is behind it. Runs after check.py against the same probe build; nothing here is checked.
 The shots land in the folder given as the first argument.
 """
 import json
@@ -13,7 +13,16 @@ import time
 import zlib
 
 SHOTS = sys.argv[1] if len(sys.argv) > 1 else "materials"
-MATERIALS = ["popover", "sidebar", "hud", "under-window", "glass", "glass-clear"]
+# (label, material, tint). Each is drawn at the larger corner of the Mac's own widgets, with the
+# page's scrim and sheen taken off so the glass is all there is.
+VARIANTS = [
+    ("popover", "popover", None),
+    ("glass", "glass", None),
+    ("glass-tint", "glass", [40, 100, 170, 70]),
+    ("clear", "glass-clear", None),
+    ("clear-dim", "glass-clear", [0, 0, 0, 60]),
+]
+RADIUS = 22
 
 
 class Probe:
@@ -29,25 +38,36 @@ class Probe:
         return self.send({"js": body}).get("r")
 
 
-def wallpaper(path, w=1024, h=768):
-    """A busy sunset of soft colour blobs, so what each material lets through shows."""
-    blobs = [(0.15, 0.2, 0.35, (255, 94, 58)), (0.75, 0.15, 0.4, (255, 196, 0)), (0.5, 0.6, 0.45, (214, 36, 159)),
-             (0.9, 0.75, 0.35, (40, 120, 255)), (0.2, 0.9, 0.35, (0, 190, 150)), (0.62, 0.35, 0.18, (255, 255, 255))]
+def crisp(path, w=1024, h=768):
+    """Hard-edged discs and bars on a light ground: whatever the glass bends shows at its edges."""
+    shapes = [(260, 260, 150, (255, 69, 58)), (700, 220, 120, (255, 204, 0)), (520, 470, 170, (0, 122, 255)),
+              (850, 560, 140, (52, 199, 89)), (180, 620, 110, (175, 82, 222))]
     rows = bytearray()
     for y in range(h):
         rows.append(0)
         for x in range(w):
-            u, v = x / w, y / h
-            r, g, b, total = 30.0, 20.0, 60.0, 1.0
-            for bx, by, size, (cr, cg, cb) in blobs:
-                weight = 4 * math.exp(-((u - bx) ** 2 + (v - by) ** 2) / (size * size * 0.18))
-                r, g, b, total = r + cr * weight, g + cg * weight, b + cb * weight, total + weight
-            stripe = 18 if (x + y) // 40 % 2 else 0
-            rows += bytes((min(255, int(r / total) + stripe), min(255, int(g / total) + stripe), min(255, int(b / total) + stripe)))
+            colour = (236, 238, 242) if (x // 64 + y // 64) % 2 else (250, 250, 252)
+            if (y // 24) % 6 == 0 and x % 512 < 380:
+                colour = (28, 28, 30)
+            for cx, cy, r, c in shapes:
+                if (x - cx) ** 2 + (y - cy) ** 2 <= r * r:
+                    colour = c
+            rows += bytes(colour)
     chunk = lambda kind, data: struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
     with open(path, "wb") as f:
-        f.write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+        f.write(bytes.fromhex("89504e470d0a1a0a") + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
                 + chunk(b"IDAT", zlib.compress(bytes(rows), 6)) + chunk(b"IEND", b""))
+
+
+def apple_wallpaper():
+    """The first of the Mac's own wallpapers that is a picture rather than a plain colour."""
+    found = []
+    for folder in ["/System/Library/Desktop Pictures", "/Library/Desktop Pictures"]:
+        for root, _, files in os.walk(folder):
+            found += [os.path.join(root, f) for f in files if f.lower().endswith((".heic", ".jpg", ".png"))]
+    print("system wallpapers", found[:30], flush=True)
+    pictures = [f for f in found if "Solid Colors" not in f and "thumbnail" not in f.lower()]
+    return pictures[0] if pictures else None
 
 
 def osascript(script):
@@ -62,11 +82,13 @@ def shot(probe, name):
 
 
 os.makedirs(SHOTS, exist_ok=True)
-paper = os.path.abspath(os.path.join(SHOTS, "wallpaper.png"))
-wallpaper(paper)
-set_paper = osascript(f'tell application "System Events" to tell every desktop to set picture to "{paper}"')
-print("wallpaper", set_paper.returncode, set_paper.stderr.strip(), flush=True)
-time.sleep(3)
+papers = []
+apple = apple_wallpaper()
+if apple:
+    papers.append(("apple", apple))
+hard = os.path.abspath(os.path.join(SHOTS, "crisp.png"))
+crisp(hard)
+papers.append(("crisp", hard))
 
 probe = Probe()
 probe.js("document.querySelector('.back')?.click();")
@@ -76,24 +98,26 @@ probe.js("document.querySelector('.back')?.click();")
 time.sleep(0.6)
 probe.js("document.querySelectorAll('[role=tab]')[0].click();")
 time.sleep(1)
-print("boot", probe.js("return await window.__TAURI__.core.invoke('bridge', {m: 'boot', p: {}}).then(b => ({glass: b.glass}))"), flush=True)
 probe.send({"native": "move", "x": 330, "y": 170})
 time.sleep(0.8)
 
-# The page lays a scrim over the material for contrast. Without a wallpaper sample the Mac build
-# assumes black behind it and lays the most ("now"); "thin" is the least the Windows build uses;
-# "none" is the material alone.
-SCRIMS = {"light": [("now", 0.88), ("thin", 0.34), ("none", 0)], "dark": [("now", 0.88), ("thin", 0.30), ("none", 0)]}
-COLOURS = {"light": "245, 249, 252", "dark": "16, 24, 32"}
-for look in ["light", "dark"]:
-    osascript(f'tell application "System Events" to tell appearance preferences to set dark mode to {str(look == "dark").lower()}')
-    time.sleep(2.5)
-    subprocess.run(["screencapture", "-x", os.path.join(SHOTS, f"{look}-desktop.png")], check=False)
-    ink = "light" if look == "dark" else "dark"
-    for name in MATERIALS:
-        print(look, name, probe.send({"native": "material", "name": name, "dark": look == "dark"}), flush=True)
-        for label, alpha in SCRIMS[look]:
-            probe.js(f"const r = document.documentElement; r.dataset.ink = '{ink}'; r.style.setProperty('--scrim', 'rgba({COLOURS[look]}, {alpha})');")
-            time.sleep(1)
-            shot(probe, f"{look}-{label}-{name}")
+for paper_name, paper in papers:
+    result = osascript(f'tell application "System Events" to tell every desktop to set picture to "{paper}"')
+    print("wallpaper", paper_name, paper, result.returncode, result.stderr.strip(), flush=True)
+    time.sleep(3)
+    for look in ["light", "dark"]:
+        osascript(f'tell application "System Events" to tell appearance preferences to set dark mode to {str(look == "dark").lower()}')
+        time.sleep(2.5)
+        ink = "light" if look == "dark" else "dark"
+        for label, name, tint in VARIANTS:
+            request = {"native": "material", "name": name, "dark": look == "dark", "radius": RADIUS}
+            if tint:
+                request["tint"] = tint
+            print(paper_name, look, label, probe.send(request), flush=True)
+            probe.js(f"const r = document.documentElement; r.dataset.ink = '{ink}'; "
+                     "r.style.setProperty('--scrim', 'transparent'); r.style.setProperty('--sheen', 'none');")
+            time.sleep(1.2)
+            shot(probe, f"{paper_name}-{look}-{label}")
+        # The Dock and menu bar are the system's own glass, to hold the widget against.
+        subprocess.run(["screencapture", "-x", os.path.join(SHOTS, f"{paper_name}-{look}-desktop.png")], check=False)
 osascript('tell application "System Events" to tell appearance preferences to set dark mode to false')
