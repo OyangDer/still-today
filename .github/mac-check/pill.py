@@ -1,5 +1,5 @@
 """A screen recording of the tab bar with Apple's Liquid Glass as the selection pill, the widget
-itself in Liquid Glass at the larger corner, light and then dark, over one of the Mac's own
+itself in Liquid Glass at the larger corner, in light mode, over one of the Mac's own
 wallpapers. Runs after check.py against the same probe build; nothing here is checked.
 The recordings and stills land in the folder given as the first argument.
 """
@@ -27,9 +27,9 @@ const send = () => {
   const m = /translate3d\\(([-\\d.]+)px/.exec(pill.style.transform);
   const x = m ? +m[1] : 0, show = !band.classList.contains('away'), key = x + '|' + show;
   if (key === last) return;
-  const ms = last === undefined ? 0 : 420;
+  const ms = last === undefined ? 0 : 420, look = window.__pill ?? { native: true, style: 'plain' };
   last = key;
-  window.__TAURI__.core.invoke('bridge', { m: 'probe.pill', p: { x, ms, show } });
+  window.__TAURI__.core.invoke('bridge', { m: 'probe.pill', p: { x, ms, show: show && look.native, style: look.style } });
 };
 new MutationObserver(send).observe(pill, { attributes: true, attributeFilter: ['style'] });
 new MutationObserver(send).observe(band, { attributes: true, attributeFilter: ['class'] });
@@ -91,30 +91,39 @@ time.sleep(0.8)
 print("follow", probe.js(FOLLOW), flush=True)
 print("pill", probe.send({"native": "pill", "x": 0, "ms": 0, "show": True}), flush=True)
 
-for look in ["light", "dark"]:
-    osascript(f'tell application "System Events" to tell appearance preferences to set dark mode to {str(look == "dark").lower()}')
-    time.sleep(2.5)
-    print(look, probe.send({"native": "material", "name": "glass", "dark": look == "dark", "radius": RADIUS}), flush=True)
-    ink = "light" if look == "dark" else "dark"
-    probe.js(f"const r = document.documentElement; r.dataset.ink = '{ink}'; "
-             "r.style.setProperty('--scrim', 'transparent'); r.style.setProperty('--sheen', 'none');")
+# (label, native glass?, its motion, window morph?). The page's CSS pill is the baseline: if it
+# stutters too, the runner is the cause and not the glass.
+VARIANTS = [
+    ("glass", True, "plain", True),
+    ("glass-stretch", True, "stretch", True),
+    ("css", False, "plain", True),
+    ("glass-nomorph", True, "plain", False),
+]
+FRAMES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frames.swift")
+print("light", probe.send({"native": "material", "name": "glass", "dark": False, "radius": RADIUS}), flush=True)
+probe.js("const r = document.documentElement; r.dataset.ink = 'dark'; "
+         "r.style.setProperty('--scrim', 'transparent'); r.style.setProperty('--sheen', 'none');")
+for label, native, style, morph in VARIANTS:
+    probe.js(f"window.__pill = {{ native: {str(native).lower()}, style: '{style}' }}; "
+             f"document.querySelector('.band .pill').style.visibility = '{'hidden' if native else 'visible'}'; "
+             f"await window.__TAURI__.core.invoke('bridge', {{ m: 'morph.set', p: {{ on: {str(morph).lower()} }} }});")
     tab(probe, 0)
     time.sleep(1.5)
-    seconds = 2 + 1.6 * len(ROUTE)
-    video = os.path.join(SHOTS, f"tabs-{look}.mov")
-    recorder = subprocess.Popen(["screencapture", "-x", "-v", "-V", str(int(seconds) + 1), video])
+    video = os.path.join(SHOTS, f"tabs-{label}.mov")
+    began = time.time()
+    recorder = subprocess.Popen(["screencapture", "-x", "-v", "-V", str(int(2 + 1.6 * len(ROUTE)) + 1), video])
     time.sleep(1.5)
-    for step, i in enumerate(ROUTE):
+    clicks = []
+    for i in ROUTE:
+        clicks.append(time.time() - began)
         tab(probe, i)
-        # Mid-move and settled stills of the first few hops.
-        if step < 3:
-            time.sleep(0.12)
-            subprocess.run(["screencapture", "-x", "-R", region(probe), os.path.join(SHOTS, f"{look}-{step}-moving.png")], check=False)
-            time.sleep(1.0)
-            subprocess.run(["screencapture", "-x", "-R", region(probe), os.path.join(SHOTS, f"{look}-{step}-settled.png")], check=False)
-            time.sleep(0.4)
-        else:
-            time.sleep(1.6)
+        time.sleep(1.6)
     recorder.wait(timeout=60)
-    print(look, "recorded", os.path.exists(video), flush=True)
-osascript('tell application "System Events" to tell appearance preferences to set dark mode to false')
+    print(label, "recorded", os.path.exists(video), "clicks", [round(c, 2) for c in clicks], flush=True)
+    # Frame by frame across the first hop, a little either side, at 30 a second.
+    strip = os.path.join(SHOTS, "frames", label)
+    os.makedirs(strip, exist_ok=True)
+    result = subprocess.run(["swift", FRAMES, video, os.path.join(strip, "f"), str(clicks[0] - 0.8), "60", str(1 / 30)],
+                            capture_output=True, text=True)
+    print(label, "frames", result.returncode, result.stderr[-400:], len(os.listdir(strip)), flush=True)
+probe.js("await window.__TAURI__.core.invoke('bridge', { m: 'morph.set', p: { on: true } });")

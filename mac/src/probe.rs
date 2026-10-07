@@ -104,7 +104,7 @@ pub fn place_pill(window: &WebviewWindow, request: Value) {
     });
 }
 
-// {x, show?, ms?}: a Liquid Glass pill just behind the page, under the tab labels where the page's
+// {x, show?, ms?, style?}: a Liquid Glass pill just behind the page, under the tab labels where the page's
 // own pill sits (x in points from the page's left edge). It stretches toward the tab it is going
 // to, then settles there. A look at Apple's own selection glass, not yet the widget's.
 #[cfg(target_os = "macos")]
@@ -165,13 +165,25 @@ fn pill(webview: *mut std::ffi::c_void, request: &Value) -> Value {
         pill.setFrame(to);
         return json!({ "ok": true });
     }
+    let seconds = ms / 1000.0;
+    // One unbroken move that runs just past the tab and back.
+    if request["style"].as_str() != Some("stretch") {
+        let target = pill.clone();
+        let changes = RcBlock::new(move |context: NonNull<NSAnimationContext>| {
+            let context = unsafe { context.as_ref() };
+            context.setDuration(seconds);
+            context.setTimingFunction(Some(&CAMediaTimingFunction::functionWithControlPoints(0.25, 1.2, 0.4, 1.0)));
+            target.animator().setFrame(to);
+        });
+        NSAnimationContext::runAnimationGroup(&changes);
+        return json!({ "ok": true });
+    }
 
     // The leading edge runs ahead and the trailing edge lags, the pill a little squashed: the glass
     // reads as liquid. Then it springs into place, just past and back.
     let d = to.origin.x - from.origin.x;
     let (left, right) = if d > 0.0 { (from.origin.x + 0.3 * d, from.origin.x + W + 0.8 * d) } else { (from.origin.x + 0.8 * d, from.origin.x + W + 0.3 * d) };
     let stretched = NSRect::new(NSPoint::new(left, y + 2.0), NSSize::new(right - left, H - 4.0));
-    let seconds = ms / 1000.0;
     let (target, settle) = (pill.clone(), pill.clone());
     let changes = RcBlock::new(move |context: NonNull<NSAnimationContext>| {
         let context = unsafe { context.as_ref() };
