@@ -70,6 +70,7 @@
     line-height: 1.3;
     font-weight: 650;
     letter-spacing: -0.2px;
+    -webkit-user-select: text;
     user-select: text;
   }
 
