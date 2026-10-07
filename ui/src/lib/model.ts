@@ -1,11 +1,16 @@
-export type Theme = 'aura' | 'light' | 'dark';
+/** Light, dark, or worked out: from the wallpaper behind Aura on Windows, else from the system. */
+export type Mode = 'light' | 'dark' | 'auto';
+/** The single choice earlier saves made, Aura standing beside light and dark. */
+type Theme = 'aura' | 'light' | 'dark';
 
 /** Shorter focus sessions are not kept: not when they end, not from an import, not from an old save. */
 export const MIN_FOCUS_SECONDS = 10 * 60;
 export type Lang = 'zh' | 'en';
 
 export interface Settings {
-  theme: Theme;
+  /** The desktop showing through the widget, in light or dark as `mode` says. */
+  aura: boolean;
+  mode: Mode;
   lang: Lang;
   topmost: boolean;
   locked: boolean;
@@ -188,7 +193,7 @@ export interface Data {
 export function emptyData(lang: Lang): Data {
   return {
     v: 1,
-    settings: { theme: 'aura', lang, topmost: false, locked: false, focusSeconds: 25 * 60, notifications: true, courseNames: {}, hiddenCourses: [] },
+    settings: { aura: true, mode: 'auto', lang, topmost: false, locked: false, focusSeconds: 25 * 60, notifications: true, courseNames: {}, hiddenCourses: [] },
     canvas: { host: null, user: null, tokenExpires: null, tokenExpiresFromCanvas: false, lastSync: null, error: null, colors: {}, courses: {}, announcementsSeen: null, announcementsViewed: null },
     feeds: [],
     assignments: {},
@@ -210,10 +215,22 @@ export function normalize(raw: Partial<Data>, lang: Lang): Data {
     ...base,
     ...raw,
     v: 1,
-    settings: { ...base.settings, ...raw.settings },
+    settings: { ...base.settings, ...appearance(raw.settings) },
     focus: (raw.focus ?? base.focus).filter((s) => s.seconds >= MIN_FOCUS_SECONDS),
     canvas: { ...base.canvas, ...raw.canvas },
   };
+}
+
+/** Aura on its own was the dark or light that suited the wallpaper; light and dark were solid. */
+export const THEMES: Record<Theme, Pick<Settings, 'aura' | 'mode'>> = {
+  aura: { aura: true, mode: 'auto' },
+  light: { aura: false, mode: 'light' },
+  dark: { aura: false, mode: 'dark' },
+};
+
+function appearance(saved: Partial<Settings> & { theme?: Theme } = {}): Partial<Settings> {
+  const { theme, ...rest } = saved;
+  return theme && rest.aura === undefined ? { ...THEMES[theme], ...rest } : rest;
 }
 
 /** A saved file's data, or null when it cannot be read as one (cut short, emptied, damaged). */

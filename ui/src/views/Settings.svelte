@@ -7,14 +7,14 @@
   import { dayKey, fromDayKey, hhmm, parseIso } from '../lib/time';
   import { slide } from 'svelte/transition';
   import { easeOut, fade, isReduced, move } from '../lib/motion';
-  import type { Lang, Theme } from '../lib/model';
+  import type { Lang, Mode } from '../lib/model';
   import DateField from '../components/DateField.svelte';
   import Icon from '../components/Icon.svelte';
   import PageHeader from '../components/PageHeader.svelte';
   import Segmented from '../components/Segmented.svelte';
   import Toggle from '../components/Toggle.svelte';
 
-  const THEMES: Theme[] = ['aura', 'light', 'dark'];
+  const MODES: Mode[] = ['light', 'dark', 'auto'];
 
   let lang = $state<Lang>(app.data.settings.lang);
   let token = $state('');
@@ -166,11 +166,15 @@
   <div class="content scroll">
     <section>
       <h3>{t('settings.appearance')}</h3>
+      <!-- Aura lays the desktop under whichever of light and dark is chosen; each card previews both together. -->
+      <div class="toggles">
+        <Toggle checked={app.data.settings.aura} label={t('settings.aura')} onchange={(aura) => app.setAppearance({ aura })} />
+      </div>
       <div class="themes">
-        {#each THEMES as theme (theme)}
-          <button class="theme" class:on={app.data.settings.theme === theme} onclick={() => app.setTheme(theme)}>
-            <span class="swatch" data-theme-preview={theme}><span></span></span>
-            <span class="theme-name">{t(`theme.${theme}`)}</span>
+        {#each MODES as mode (mode)}
+          <button class="theme" class:on={app.data.settings.mode === mode} onclick={() => app.setAppearance({ mode })}>
+            <span class="swatch" class:aura={app.data.settings.aura} data-mode={mode}><span></span></span>
+            <span class="theme-name">{t(`mode.${mode}`)}</span>
           </button>
         {/each}
       </div>
@@ -514,22 +518,31 @@
     opacity: 0.55;
   }
 
-  [data-theme-preview='aura'] {
-    color: #fff;
+  /* The Porcelain and Midnight cards' own ink and background; over Aura, frosted and smoked
+     over a stand-in wallpaper. Auto shows the two halves. */
+  .swatch {
+    --light: #faf9f6;
+    --dark: #17191c;
+    color: #252d29;
+    background: linear-gradient(135deg, var(--light) 50%, var(--dark) 50%);
+  }
+
+  .swatch.aura {
+    --light: rgba(245, 249, 252, 0.45);
+    --dark: rgba(16, 24, 32, 0.5);
     background:
+      linear-gradient(135deg, var(--light) 50%, var(--dark) 50%),
       radial-gradient(circle at 30% 30%, rgba(255, 214, 107, 0.9), transparent 45%),
       linear-gradient(150deg, #4cc7f2, #7fb7e8 60%, #b9a6e8);
   }
 
-  /* The Porcelain and Midnight cards' own ink and background. */
-  [data-theme-preview='light'] {
-    color: #252d29;
-    background: #faf9f6;
+  .swatch[data-mode='light'] {
+    --dark: var(--light);
   }
 
-  [data-theme-preview='dark'] {
+  .swatch[data-mode='dark'] {
+    --light: var(--dark);
     color: #eceef1;
-    background: #17191c;
   }
 
   .theme-name {

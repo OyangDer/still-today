@@ -17,7 +17,7 @@ import { call, on, type AuraSample, type BootInfo, type HttpReply } from './host
 import { duration, setLang, t } from './i18n';
 import { parseFeed } from './ics';
 import { importLegacy, type LegacyDump } from './legacy';
-import { emptyData, MIN_FOCUS_SECONDS, readSaved, type Announcement, type Data, type Lang, type LocalEvent, type Task, type Theme } from './model';
+import { emptyData, MIN_FOCUS_SECONDS, readSaved, type Announcement, type Data, type Lang, type LocalEvent, type Settings, type Task } from './model';
 import { addDays, dayKey, parseIso, uid } from './time';
 
 export type Tab = 'today' | 'focus' | 'calendar' | 'tasks';
@@ -95,6 +95,8 @@ class Store {
     this.autostart = info.autostart;
     this.canvasAvatar = info.canvasAvatar;
     this.glass = info.glass;
+    // Auto may follow the system's light or dark appearance.
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => this.applyTheme());
     const lang: Lang = info.locale.toLowerCase().startsWith('zh') ? 'zh' : 'en';
     // A save cut short can leave the file unreadable; the one before it then stands in. Only when
     // there was never a file is this a first run.
@@ -214,11 +216,18 @@ class Store {
   // ---- appearance --------------------------------------------------------------------------
 
   applyTheme(): void {
-    const theme = this.data.settings.theme;
+    const { aura, mode } = this.data.settings;
     const root = document.documentElement;
-    root.dataset.theme = theme;
-    const look = auraLook(this.aura);
-    if (theme === 'aura') {
+    // Auto takes the wallpaper's side behind Aura, else the system's.
+    const dark =
+      mode === 'auto'
+        ? aura
+          ? auraLook(this.aura).ink === 'light'
+          : matchMedia('(prefers-color-scheme: dark)').matches
+        : mode === 'dark';
+    root.dataset.theme = aura ? 'aura' : dark ? 'dark' : 'light';
+    if (aura) {
+      const look = auraLook(this.aura, dark ? 'light' : 'dark');
       root.dataset.ink = look.ink;
       root.dataset.glass = this.glass ? 'on' : 'off';
       root.style.setProperty('--scrim', look.scrim);
@@ -226,14 +235,11 @@ class Store {
     } else {
       delete root.dataset.ink;
     }
-    void call('material', {
-      aura: theme === 'aura',
-      dark: theme === 'dark' || (theme === 'aura' && look.ink === 'light'),
-    });
+    void call('material', { aura, dark, auto: mode === 'auto' });
   }
 
-  setTheme(theme: Theme): void {
-    this.data.settings.theme = theme;
+  setAppearance(change: Partial<Pick<Settings, 'aura' | 'mode'>>): void {
+    Object.assign(this.data.settings, change);
     this.applyTheme();
     this.persist();
   }
