@@ -13,7 +13,7 @@ import time
 import zlib
 
 SHOTS = sys.argv[1] if len(sys.argv) > 1 else "materials"
-MATERIALS = ["popover", "sidebar", "hud", "under-window", "menu", "sheet", "fullscreen", "glass", "glass-clear"]
+MATERIALS = ["popover", "sidebar", "hud", "under-window", "glass", "glass-clear"]
 
 
 class Probe:
@@ -80,12 +80,20 @@ print("boot", probe.js("return await window.__TAURI__.core.invoke('bridge', {m: 
 probe.send({"native": "move", "x": 330, "y": 170})
 time.sleep(0.8)
 
+# The page lays a scrim over the material for contrast. Without a wallpaper sample the Mac build
+# assumes black behind it and lays the most ("now"); "thin" is the least the Windows build uses;
+# "none" is the material alone.
+SCRIMS = {"light": [("now", 0.88), ("thin", 0.34), ("none", 0)], "dark": [("now", 0.88), ("thin", 0.30), ("none", 0)]}
+COLOURS = {"light": "245, 249, 252", "dark": "16, 24, 32"}
 for look in ["light", "dark"]:
     osascript(f'tell application "System Events" to tell appearance preferences to set dark mode to {str(look == "dark").lower()}')
     time.sleep(2.5)
     subprocess.run(["screencapture", "-x", os.path.join(SHOTS, f"{look}-desktop.png")], check=False)
+    ink = "light" if look == "dark" else "dark"
     for name in MATERIALS:
-        print(look, name, probe.send({"native": "material", "name": name}), flush=True)
-        time.sleep(1.2)
-        shot(probe, f"{look}-{name}")
+        print(look, name, probe.send({"native": "material", "name": name, "dark": look == "dark"}), flush=True)
+        for label, alpha in SCRIMS[look]:
+            probe.js(f"const r = document.documentElement; r.dataset.ink = '{ink}'; r.style.setProperty('--scrim', 'rgba({COLOURS[look]}, {alpha})');")
+            time.sleep(1)
+            shot(probe, f"{look}-{label}-{name}")
 osascript('tell application "System Events" to tell appearance preferences to set dark mode to false')

@@ -80,8 +80,10 @@ fn handle(app: &AppHandle, request: &Value) -> Value {
         // puts its own back.
         Some("material") => {
             let (name, target) = (request["name"].as_str().unwrap_or("").to_string(), window.clone());
+            let dark = request["dark"].as_bool().unwrap_or(false);
             let (tx, rx) = mpsc::channel();
             let _ = window.run_on_main_thread(move || {
+                let _ = target.set_theme(Some(if dark { tauri::Theme::Dark } else { tauri::Theme::Light }));
                 let _ = tx.send(material(&target, &name));
             });
             rx.recv_timeout(Duration::from_secs(5)).unwrap_or(json!({ "error": "timeout" }))
