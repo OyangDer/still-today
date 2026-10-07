@@ -404,23 +404,22 @@ pub fn dress(_window: &WebviewWindow) {}
 /// The material behind the page: the Mac's translucent glass for Aura, nothing for the solid
 /// themes, which paint an opaque card. The window's appearance picks its light or dark variant.
 #[cfg(target_os = "macos")]
-pub fn material(window: &WebviewWindow, aura: bool, dark: bool) {
+pub fn material(window: &WebviewWindow, aura: bool, theme: Option<tauri::Theme>) {
     use tauri::window::{Effect, EffectState, EffectsBuilder};
-    // Under Liquid Glass the window follows the system's appearance, and the page its ink.
+    // The window's appearance is the one chosen, or the system's; Liquid Glass and the page's ink follow it.
+    let _ = window.set_theme(theme);
     if aura && crate::glass::available() {
-        let _ = window.set_theme(None);
         let _ = window.set_effects(None);
         crate::glass::apply(window, RADIUS);
         return;
     }
     crate::glass::clear(window);
-    let _ = window.set_theme(Some(if dark { tauri::Theme::Dark } else { tauri::Theme::Light }));
     let effects = aura.then(|| EffectsBuilder::new().effect(Effect::Popover).state(EffectState::Active).radius(RADIUS).build());
     let _ = window.set_effects(effects);
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn material(_window: &WebviewWindow, _aura: bool, _dark: bool) {}
+pub fn material(_window: &WebviewWindow, _aura: bool, _theme: Option<tauri::Theme>) {}
 
 // The Mac draws a window's shadow from its shape, worked out again only when asked.
 #[cfg(target_os = "macos")]

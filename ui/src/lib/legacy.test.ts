@@ -41,7 +41,7 @@ describe('importLegacy', () => {
   it('carries settings, Canvas, assignments, tasks, token reminder, focus history and feeds', () => {
     const data = emptyData('en');
     importLegacy(data, dump);
-    expect(data.settings).toMatchObject({ theme: 'aura', lang: 'zh' });
+    expect(data.settings).toMatchObject({ aura: true, mode: 'auto', lang: 'zh' });
     expect(data.canvas).toMatchObject({ host: 'canvas.sydney.edu.au', user: 'Jordan Lee', tokenExpires: '2026-12-23' });
     expect(data.assignments['687463']).toMatchObject({
       course: 'PMGT5850', quiz: true, done: true, doneBy: 'user', updated: true, canvasState: 'pending_review',

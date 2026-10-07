@@ -17,7 +17,7 @@ import { call, on, type AuraSample, type BootInfo, type HttpReply } from './host
 import { duration, setLang, t } from './i18n';
 import { parseFeed } from './ics';
 import { importLegacy, type LegacyDump } from './legacy';
-import { emptyData, MIN_FOCUS_SECONDS, readSaved, type Announcement, type Data, type Lang, type LocalEvent, type Task, type Theme } from './model';
+import { emptyData, MIN_FOCUS_SECONDS, readSaved, type Announcement, type Data, type Lang, type LocalEvent, type Settings, type Task } from './model';
 import { addDays, dayKey, parseIso, uid } from './time';
 
 export type Tab = 'today' | 'focus' | 'calendar' | 'tasks';
@@ -102,8 +102,8 @@ class Store {
     this.canvasAvatar = info.canvasAvatar;
     this.glass = info.glass;
     this.liquid = info.liquid ?? false;
-    // Liquid Glass follows the system's light or dark appearance, and the ink follows the glass.
-    if (this.liquid) matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => this.applyTheme());
+    // Auto may follow the system's light or dark appearance.
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => this.applyTheme());
     this.mac = info.platform === 'macos';
     // Styles that only the Mac's fonts need key off this.
     if (this.mac) document.documentElement.dataset.os = 'mac';
@@ -227,18 +227,25 @@ class Store {
   // ---- appearance --------------------------------------------------------------------------
 
   applyTheme(): void {
-    const theme = this.data.settings.theme;
+    const { aura, mode } = this.data.settings;
     const root = document.documentElement;
-    root.dataset.theme = theme;
-    const look = auraLook(this.aura);
-    const liquid = theme === 'aura' && this.liquid;
+    // Auto takes the wallpaper's side behind Aura where the host samples it, else the system's.
+    const dark =
+      mode === 'auto'
+        ? aura && !this.mac
+          ? auraLook(this.aura).ink === 'light'
+          : matchMedia('(prefers-color-scheme: dark)').matches
+        : mode === 'dark';
+    root.dataset.theme = aura ? 'aura' : dark ? 'dark' : 'light';
+    const liquid = aura && this.liquid;
     root.dataset.liquid = liquid ? 'on' : 'off';
     if (liquid) {
-      root.dataset.ink = matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark';
+      root.dataset.ink = dark ? 'light' : 'dark';
       root.dataset.glass = 'on';
       root.style.setProperty('--scrim', 'transparent');
       root.style.setProperty('--sheen', 'none');
-    } else if (theme === 'aura') {
+    } else if (aura) {
+      const look = auraLook(this.aura, dark ? 'light' : 'dark');
       root.style.removeProperty('--sheen');
       root.dataset.ink = look.ink;
       root.dataset.glass = this.glass ? 'on' : 'off';
@@ -248,14 +255,11 @@ class Store {
       root.style.removeProperty('--sheen');
       delete root.dataset.ink;
     }
-    void call('material', {
-      aura: theme === 'aura',
-      dark: theme === 'dark' || (theme === 'aura' && look.ink === 'light'),
-    });
+    void call('material', { aura, dark, auto: mode === 'auto' });
   }
 
-  setTheme(theme: Theme): void {
-    this.data.settings.theme = theme;
+  setAppearance(change: Partial<Pick<Settings, 'aura' | 'mode'>>): void {
+    Object.assign(this.data.settings, change);
     this.applyTheme();
     this.persist();
   }

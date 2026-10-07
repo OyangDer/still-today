@@ -46,9 +46,10 @@ const css = (c: Rgb) => `rgb(${c.map((v) => Math.round(v)).join(', ')})`;
 const FROST = { scrim: [245, 249, 252] as Rgb, floor: 0.34, ink: [22, 35, 43] as Rgb, muted: [58, 73, 82] as Rgb };
 const SMOKE = { scrim: [16, 24, 32] as Rgb, floor: 0.3, ink: [241, 246, 248] as Rgb, muted: [201, 208, 212] as Rgb };
 
-export function auraLook(sample: AuraSample | null): AuraLook {
+/** `ink` is the one asked for, if any; otherwise the one the wallpaper suits. */
+export function auraLook(sample: AuraSample | null, ink?: AuraLook['ink']): AuraLook {
   const average = hex(sample?.average ?? '#5a6a78');
-  const darkInk = luminance(over(WHITE, 0x30 / 255, average)) >= 0.2;
+  const darkInk = ink ? ink === 'dark' : luminance(over(WHITE, 0x30 / 255, average)) >= 0.2;
   const mode = darkInk ? FROST : SMOKE;
   const worst = hex(darkInk ? (sample?.darkest ?? '#000000') : (sample?.brightest ?? '#ffffff'));
   let alpha = mode.floor;

@@ -1,5 +1,5 @@
 import { shortCourse } from './canvas';
-import { MIN_FOCUS_SECONDS, type Assignment, type Data, type LocalEvent, type Submission, type Task, type Theme } from './model';
+import { MIN_FOCUS_SECONDS, type Assignment, type Data, type LocalEvent, type Submission, type Task, THEMES } from './model';
 import { parseIso } from './time';
 
 // Maps the WPF release's SQLite rows (read by the host through winsqlite3) into the new model.
@@ -13,7 +13,7 @@ export interface LegacyDump {
   feeds: string[];
 }
 
-const THEMES: Record<string, Theme> = { Glass: 'aura', Porcelain: 'light', Midnight: 'dark' };
+const WPF_THEMES: Record<string, keyof typeof THEMES> = { Glass: 'aura', Porcelain: 'light', Midnight: 'dark' };
 
 const str = (v: unknown) => (typeof v === 'string' ? v : null);
 const flag = (v: unknown) => v === 1 || v === '1';
@@ -25,7 +25,8 @@ export function importLegacy(data: Data, dump: LegacyDump): void {
   const t = dump.tables;
   const setting = (key: string) => str(t.settings?.find((r) => r.key === key)?.value);
 
-  data.settings.theme = THEMES[setting('still-today.theme') ?? ''] ?? data.settings.theme;
+  const theme = WPF_THEMES[setting('still-today.theme') ?? ''];
+  if (theme) Object.assign(data.settings, THEMES[theme]);
   const language = setting('app.language');
   if (language === 'Chinese') data.settings.lang = 'zh';
   if (language === 'English') data.settings.lang = 'en';

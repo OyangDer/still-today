@@ -45,7 +45,7 @@
     if (app.liquid) void call('pill', { x, start, ms, show: liquid && !app.tabBarAway });
   });
 
-  const liquid = $derived(app.liquid && app.data.settings.theme === 'aura');
+  const liquid = $derived(app.liquid && app.data.settings.aura);
 </script>
 
 <div class="band" class:away={app.tabBarAway} class:liquid bind:this={band} role="tablist">
