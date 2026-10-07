@@ -1,7 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
     <loc>https://oyangder.github.io/still-today/</loc>
     <lastmod>2026-10-07</lastmod>
+    <xhtml:link rel="alternate" hreflang="zh-CN" href="https://oyangder.github.io/still-today/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://oyangder.github.io/still-today/en/"/>
+  </url>
+  <url>
+    <loc>https://oyangder.github.io/still-today/en/</loc>
+    <lastmod>2026-10-07</lastmod>
+    <xhtml:link rel="alternate" hreflang="zh-CN" href="https://oyangder.github.io/still-today/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://oyangder.github.io/still-today/en/"/>
   </url>
 </urlset>
