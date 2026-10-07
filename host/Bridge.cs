@@ -142,6 +142,8 @@ internal sealed class Bridge
                 return await CanvasConnect((string)p["host"], (string)p["token"]);
             case "canvas.get":
                 return await CanvasGet((string)p["path"]);
+            case "canvas.token":
+                return await CanvasToken();
             case "canvas.schools":
                 return Result(await Http.SchoolSearch((string)p["name"]));
             case "canvas.avatar":
@@ -197,6 +199,16 @@ internal sealed class Bridge
         if (token == null) return new Dictionary<string, object> { ["status"] = 401 };
         if (!path.StartsWith("/api/v1/", StringComparison.Ordinal)) throw new ArgumentException("path");
         return Result(await Http.CanvasGet(new Uri(new Uri("https://" + host), path), token));
+    }
+
+    // Canvas looks a token up by its hint, the first five characters after the "<shard>~" prefix,
+    // so the page learns the expiry chosen in Canvas without ever seeing the token.
+    private static async Task<object> CanvasToken()
+    {
+        var token = Secrets.Read(CanvasTarget, out var host);
+        if (token == null) return new Dictionary<string, object> { ["status"] = 401 };
+        var hint = token.Substring(token.IndexOf('~') + 1, 5);
+        return Result(await Http.CanvasGet(new Uri(new Uri("https://" + host), "/api/v1/users/self/tokens/" + Uri.EscapeDataString(hint)), token));
     }
 
     // The picture is fetched without the token: Canvas redirects it to its file store with a signed

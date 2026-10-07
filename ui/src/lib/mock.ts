@@ -149,6 +149,9 @@ export function createMock(emit: Emit) {
       }
       case 'canvas.connect':
         return { status: 200, body: JSON.stringify({ id: 7, name: 'Jordan Lee' }), next: null };
+      // ?notokenexpiry stands for a Canvas that will not say when the token expires.
+      case 'canvas.token':
+        return params.has('notokenexpiry') ? { status: 404, body: null, next: null } : { status: 200, body: JSON.stringify({ expires_at: day(88).toISOString() }), next: null };
       case 'canvas.get': {
         await new Promise((r) => setTimeout(r, 400));
         const path = p.path as string;
