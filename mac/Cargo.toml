@@ -26,7 +26,7 @@ tauri-plugin-autostart = "2"
 mac-notification-sys = "0.6"
 block2 = "0.6"
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSView", "NSResponder", "NSEvent", "NSWorkspace", "NSSound", "NSGlassEffectView", "NSAnimation", "NSAnimationContext", "NSGraphics", "block2", "objc2-quartz-core"] }
+objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSView", "NSResponder", "NSEvent", "NSWorkspace", "NSSound", "NSScreen", "NSGlassEffectView", "NSAnimation", "NSAnimationContext", "NSGraphics", "block2", "objc2-quartz-core"] }
 objc2-foundation = { version = "0.3", features = ["NSData", "NSNotification", "NSOperation", "NSString", "block2"] }
 objc2-quartz-core = { version = "0.3", features = ["CALayer", "CAMediaTimingFunction"] }
 # Liquid Glass for the probe's material comparison; Tauri already builds this crate for its effects.
