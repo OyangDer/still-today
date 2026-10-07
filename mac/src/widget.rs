@@ -17,7 +17,7 @@ const GLIDE_MS: f64 = 300.0;
 const MAX: (f64, f64) = (440.0, 600.0);
 // The corner the Mac draws on its own widgets' scale, from the mockup.
 #[cfg(target_os = "macos")]
-const RADIUS: f64 = 11.0;
+pub(crate) const RADIUS: f64 = 11.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rect {

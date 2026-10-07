@@ -29,6 +29,8 @@ objc2 = "0.6"
 objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSView", "NSResponder", "NSEvent", "NSWorkspace", "NSSound", "objc2-quartz-core"] }
 objc2-foundation = { version = "0.3", features = ["NSData", "NSNotification", "NSOperation", "NSString", "block2"] }
 objc2-quartz-core = { version = "0.3", features = ["CALayer"] }
+# Liquid Glass for the probe's material comparison; Tauri already builds this crate for its effects.
+window-vibrancy = { version = "0.8", optional = true }
 
 # Only for trying the build on Windows: the chime, and whether the mouse is still down after a drag.
 [target.'cfg(windows)'.dependencies]
@@ -39,7 +41,7 @@ windows-sys = { version = "0.59", features = ["Win32_UI_Input_KeyboardAndMouse"]
 # Release builds serve the bundled ui/dist; debug builds without it load devUrl when one is set.
 custom-protocol = ["tauri/custom-protocol"]
 # The CI check's remote control (src/probe.rs). Never in a build anyone installs.
-probe = []
+probe = ["dep:window-vibrancy"]
 
 [profile.release]
 lto = true

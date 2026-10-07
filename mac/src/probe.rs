@@ -76,6 +76,16 @@ fn handle(app: &AppHandle, request: &Value) -> Value {
             wake();
             Value::Null
         }
+        // Another material behind the page, for the comparison sheet; the page's next theme change
+        // puts its own back.
+        Some("material") => {
+            let (name, target) = (request["name"].as_str().unwrap_or("").to_string(), window.clone());
+            let (tx, rx) = mpsc::channel();
+            let _ = window.run_on_main_thread(move || {
+                let _ = tx.send(material(&target, &name));
+            });
+            rx.recv_timeout(Duration::from_secs(5)).unwrap_or(json!({ "error": "timeout" }))
+        }
         _ => json!({ "error": "request" }),
     }
 }
@@ -134,6 +144,44 @@ fn level(window: &WebviewWindow) -> (Value, Value) {
 #[cfg(not(target_os = "macos"))]
 fn level(_window: &WebviewWindow) -> (Value, Value) {
     (Value::Null, Value::Null)
+}
+
+#[cfg(target_os = "macos")]
+fn material(window: &WebviewWindow, name: &str) -> Value {
+    use tauri::window::{Effect, EffectState, EffectsBuilder};
+    use window_vibrancy::{apply_liquid_glass, clear_liquid_glass, LiquidGlassOptions, NSGlassEffectViewStyle};
+    let _ = clear_liquid_glass(window);
+    let _ = window.set_effects(None);
+    let glass = match name {
+        "glass" => Some(NSGlassEffectViewStyle::Regular),
+        "glass-clear" => Some(NSGlassEffectViewStyle::Clear),
+        _ => None,
+    };
+    if let Some(style) = glass {
+        return match apply_liquid_glass(window, LiquidGlassOptions::new(style).radius(widget::RADIUS)) {
+            Ok(()) => json!({ "ok": true }),
+            Err(e) => json!({ "error": e.to_string() }),
+        };
+    }
+    let effect = match name {
+        "popover" => Effect::Popover,
+        "sidebar" => Effect::Sidebar,
+        "hud" => Effect::HudWindow,
+        "under-window" => Effect::UnderWindowBackground,
+        "menu" => Effect::Menu,
+        "sheet" => Effect::Sheet,
+        "fullscreen" => Effect::FullScreenUI,
+        _ => return json!({ "error": "material" }),
+    };
+    match window.set_effects(EffectsBuilder::new().effect(effect).state(EffectState::Active).radius(widget::RADIUS).build()) {
+        Ok(()) => json!({ "ok": true }),
+        Err(e) => json!({ "error": e.to_string() }),
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn material(_window: &WebviewWindow, _name: &str) -> Value {
+    json!({ "error": "mac only" })
 }
 
 // Stands in for the Mac waking: the same notification shell::watch_wake listens for.

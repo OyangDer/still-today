@@ -80,12 +80,18 @@ jobs:
           osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to false' || true
           # Runners may have Reduce Motion on; the check notes which way the morph ran.
           defaults write com.apple.universalaccess reduceMotion -bool false || true
+          # And Reduce Transparency, which turns the glass solid.
+          defaults write com.apple.universalaccess reduceTransparency -bool false || true
           sleep 2
           rm -rf ~/Library/"Application Support"/app.stilltoday.widget
           cd mac
           cargo build --features probe
           ./target/debug/still-today > ../shots/probe.log 2>&1 &
-          python3 ../.github/mac-check/check.py ../shots/check || { cat ../shots/probe.log; exit 1; }
+          failed=0
+          python3 ../.github/mac-check/check.py ../shots/check || { cat ../shots/probe.log; failed=1; }
+          # The Aura material comparison, over a colourful wallpaper. Not a check.
+          python3 ../.github/mac-check/materials.py ../shots/materials || true
+          exit $failed
 
       - uses: actions/upload-artifact@v4
         if: always()

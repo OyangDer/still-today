@@ -4021,6 +4021,7 @@ dependencies = [
  "tokio",
  "url",
  "uuid",
+ "window-vibrancy",
  "windows-sys 0.59.0",
 ]
 
