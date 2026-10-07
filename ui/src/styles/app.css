@@ -147,6 +147,7 @@ body {
   font: 13px/1.45 var(--font);
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
+  -webkit-user-select: none;
   user-select: none;
   cursor: default;
 }
@@ -167,6 +168,7 @@ button {
 
 input,
 textarea {
+  -webkit-user-select: text;
   user-select: text;
 }
 

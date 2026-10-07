@@ -25,6 +25,7 @@
   .rich {
     font-size: 13.5px;
     line-height: 1.7;
+    -webkit-user-select: text;
     user-select: text;
     overflow-wrap: anywhere;
   }
