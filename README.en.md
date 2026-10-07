@@ -19,7 +19,7 @@ The video's captions are in Chinese.
 ### 1. Connect Canvas
 
 - Type your school's name to find its Canvas, or paste your school's Canvas link if it isn't listed.
-- Follow the three steps shown to create an access token, paste it in, and you're connected. You're reminded before the token expires.
+- Follow the three steps shown to create an access token, paste it in, and you're connected (step by step in [Connect Canvas](#connect-canvas)). You're reminded before the token expires.
 - Some schools don't let students create tokens; if yours doesn't, Still Today can't connect for now.
 
 | Finding Canvas by school name |
@@ -72,9 +72,45 @@ The video's captions are in Chinese.
 1. Download `StillToday-<version>-win-x64-setup.exe` from [Releases](../../releases/latest).
 2. Run it. It installs for your Windows user only and doesn't ask for administrator rights.
 3. Windows may show **"Windows protected your PC"**. The installer isn't code-signed, so SmartScreen doesn't recognise it. Click **More info**, then **Run anyway**.
-4. Open Settings in the widget and connect your school as in "Connect Canvas" above.
+4. Connect your school as in "Connect Canvas" below.
 
 **Requirements:** Windows 10 (version 1903 or later) or Windows 11. It runs on .NET Framework 4.8 and the WebView2 Runtime, which Windows already has, so the installer is about 2.5 MB.
+
+## Connect Canvas
+
+Once it's installed, these four steps connect the widget to your school's Canvas. You only do this once.
+
+### Step 1: Find your school
+
+Click **···** at the top right of the widget → **Settings**, type your school's name in the Canvas box, and pick your school. For the University of Sydney, `univ syd` is enough. If it isn't listed, paste your school's Canvas link instead.
+
+<img src="docs/screenshots/en/connect.png" width="240" alt="Typing a school's name to find its Canvas">
+
+### Step 2: Create a token in Canvas
+
+Click **Open Canvas settings**. Your browser opens Canvas's Settings page (sign in first if asked). Scroll down to Approved Integrations; **+ New Access Token** is at the bottom of that list. Click it.
+
+| In the widget | Canvas settings |
+|:---:|:---:|
+| <img src="docs/screenshots/en/connect-steps.png" width="240" alt="The Open Canvas settings button and the three steps in the widget"> | <img src="docs/screenshots/canvas-new-token.png" width="480" alt="The + New Access Token button on Canvas's Settings page"> |
+
+Didn't land there? In Canvas, click your profile picture on the left → **Settings**.
+
+### Step 3: Generate the token and copy it
+
+1. **Purpose**: anything, such as "Homework sync".
+2. **Expiration**: the latest date it allows; any time.
+3. Click **Generate Token** and copy the token. **Copy it right away: once the dialog is closed, the token can't be shown again.**
+
+<img src="docs/screenshots/canvas-generate-token.png" width="480" alt="Canvas's New Access Token dialog: purpose, expiration date, Generate Token">
+
+### Step 4: Paste and connect
+
+Back in the widget, paste the token into the Access token box and click **Connect**. From then on it syncs every 10 minutes, and it reminds you to make a new token before this one expires.
+
+<img src="docs/screenshots/en/connect-pasted.png" width="240" alt="Pasting the token into the widget and clicking Connect">
+
+If Canvas's Settings page has no **+ New Access Token**, your school doesn't let students create tokens, and Still Today can't connect for now.
 
 ## Your data
 

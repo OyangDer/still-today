@@ -22,8 +22,10 @@ export interface Settings {
 export interface CanvasState {
   host: string | null;
   user: string | null;
-  /** Day key the personal access token stops working, if the user recorded it. */
+  /** Day key the personal access token stops working: read from Canvas, else as the user recorded it. */
   tokenExpires: string | null;
+  /** Whether Canvas gave the expiry, so it is shown rather than asked for; null there means the token never expires. */
+  tokenExpiresFromCanvas: boolean;
   lastSync: string | null;
   error: SyncError | null;
   /** Course id → the colour the user gave the course in Canvas. */
@@ -187,7 +189,7 @@ export function emptyData(lang: Lang): Data {
   return {
     v: 1,
     settings: { theme: 'aura', lang, topmost: false, locked: false, focusSeconds: 25 * 60, notifications: true, courseNames: {}, hiddenCourses: [] },
-    canvas: { host: null, user: null, tokenExpires: null, lastSync: null, error: null, colors: {}, courses: {}, announcementsSeen: null, announcementsViewed: null },
+    canvas: { host: null, user: null, tokenExpires: null, tokenExpiresFromCanvas: false, lastSync: null, error: null, colors: {}, courses: {}, announcementsSeen: null, announcementsViewed: null },
     feeds: [],
     assignments: {},
     tasks: {},

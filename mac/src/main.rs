@@ -196,6 +196,19 @@ async fn canvas_get(path: &str) -> Result<Value, String> {
     Ok(http::canvas_get(url, &token).await.json())
 }
 
+// The token's own record, for the expiry chosen when it was made. Canvas finds a token by the five
+// characters after its "<shard>~" prefix.
+async fn canvas_token() -> Result<Value, String> {
+    let Some((host, token)) = secrets::canvas()? else { return Ok(json!({ "status": 401 })) };
+    let hint: String = token.split_once('~').map_or(token.as_str(), |(_, rest)| rest).chars().take(5).collect();
+    if hint.chars().count() < 5 {
+        return Ok(json!({ "status": 404 }));
+    }
+    let mut url = Url::parse(&format!("https://{host}/api/v1/users/self/tokens")).map_err(|_| "url")?;
+    url.path_segments_mut().map_err(|_| "url")?.push(&hint);
+    Ok(http::canvas_get(url, &token).await.json())
+}
+
 // The picture is fetched without the token: Canvas redirects it to its file store with a signed
 // link. No picture clears the cache; a failed download keeps the last one.
 async fn canvas_avatar(host: &Host, url: Option<&str>) -> Result<Value, String> {
@@ -305,6 +318,7 @@ async fn bridge(app: AppHandle, window: WebviewWindow, host: State<'_, Host>, m:
         }
         "canvas.connect" => canvas_connect(str_of(&p, "host")?, str_of(&p, "token")?).await,
         "canvas.get" => canvas_get(str_of(&p, "path")?).await,
+        "canvas.token" => canvas_token().await,
         "canvas.schools" => Ok(http::school_search(str_of(&p, "name")?).await.json()),
         "canvas.avatar" => canvas_avatar(&host, p["url"].as_str()).await,
         "canvas.disconnect" => {
