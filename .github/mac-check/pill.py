@@ -94,16 +94,17 @@ print("pill", probe.send({"native": "pill", "x": 0, "ms": 0, "show": True}), flu
 # (label, native glass?, its motion, window morph?). The page's CSS pill is the baseline: if it
 # stutters too, the runner is the cause and not the glass.
 VARIANTS = [
-    ("glass", True, "plain", True),
-    ("glass-stretch", True, "stretch", True),
-    ("css", False, "plain", True),
-    ("glass-nomorph", True, "plain", False),
+    ("glass", True, "plain", True, "glass", RADIUS),
+    ("css", False, "plain", True, "glass", RADIUS),
+    ("glass-nomorph", True, "plain", False, "glass", RADIUS),
+    # What testers have now: the Popover material at the smaller corner, the page's own pill.
+    ("shipped", False, "plain", True, "popover", 11),
 ]
 FRAMES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frames.swift")
-print("light", probe.send({"native": "material", "name": "glass", "dark": False, "radius": RADIUS}), flush=True)
-probe.js("const r = document.documentElement; r.dataset.ink = 'dark'; "
-         "r.style.setProperty('--scrim', 'transparent'); r.style.setProperty('--sheen', 'none');")
-for label, native, style, morph in VARIANTS:
+for label, native, style, morph, material, radius in VARIANTS:
+    print(label, probe.send({"native": "material", "name": material, "dark": False, "radius": radius}), flush=True)
+    probe.js("const r = document.documentElement; r.dataset.ink = 'dark'; "
+             "r.style.setProperty('--scrim', 'transparent'); r.style.setProperty('--sheen', 'none');")
     probe.js(f"window.__pill = {{ native: {str(native).lower()}, style: '{style}' }}; "
              f"document.querySelector('.band .pill').style.visibility = '{'hidden' if native else 'visible'}'; "
              f"await window.__TAURI__.core.invoke('bridge', {{ m: 'morph.set', p: {{ on: {str(morph).lower()} }} }});")
@@ -120,10 +121,12 @@ for label, native, style, morph in VARIANTS:
         time.sleep(1.6)
     recorder.wait(timeout=60)
     print(label, "recorded", os.path.exists(video), "clicks", [round(c, 2) for c in clicks], flush=True)
-    # Frame by frame across the first hop, a little either side, at 30 a second.
-    strip = os.path.join(SHOTS, "frames", label)
-    os.makedirs(strip, exist_ok=True)
-    result = subprocess.run(["swift", FRAMES, video, os.path.join(strip, "f"), str(clicks[0] - 0.8), "60", str(1 / 30)],
-                            capture_output=True, text=True)
-    print(label, "frames", result.returncode, result.stderr[-400:], len(os.listdir(strip)), flush=True)
+    # Frame by frame at 60 a second across the hops where the window changes size: Focus to
+    # Calendar, which grows it, and Calendar to Tasks.
+    for hop in (1, 2):
+        strip = os.path.join(SHOTS, "frames", f"{label}-{hop}")
+        os.makedirs(strip, exist_ok=True)
+        result = subprocess.run(["swift", FRAMES, video, os.path.join(strip, "f"), str(clicks[hop] - 0.3), "60", str(1 / 60)],
+                                capture_output=True, text=True)
+        print(label, hop, "frames", result.returncode, len(os.listdir(strip)), flush=True)
 probe.js("await window.__TAURI__.core.invoke('bridge', { m: 'morph.set', p: { on: true } });")
