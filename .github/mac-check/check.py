@@ -230,16 +230,16 @@ time.sleep(0.6)
 s = probe.native("state")
 check(hidden and s["visible"] and (not MAC or s["level"] == BELOW), "hide and show again", f"level {s['level']}")
 
-# Every view in the default theme and in Dark.
+# Every view in the default look (Aura, following the system) and in solid Dark.
 theme_name = "aura"
 stray = views(probe)
-probe.js("[...document.querySelectorAll('.theme')].find(b => /深色|Dark/.test(b.textContent)).click();")
+probe.js("const a = document.querySelector('.toggle.aurora'); if (a.getAttribute('aria-checked') === 'true') a.click(); [...document.querySelectorAll('.theme')].find(b => /深色|Dark/.test(b.textContent)).click();")
 time.sleep(0.8)
 probe.js("document.querySelector('.back')?.click();")
 time.sleep(0.6)
 theme_name = "dark"
 stray |= views(probe)
-probe.js("[...document.querySelectorAll('.theme')].find(b => /Aura/.test(b.textContent)).click();")
+probe.js("const a = document.querySelector('.toggle.aurora'); if (a && a.getAttribute('aria-checked') !== 'true') a.click(); [...document.querySelectorAll('.theme')].find(b => /跟随系统|System/.test(b.textContent))?.click();")
 check(not stray, "no Windows-only words on the Mac" if MAC else "Windows words (expected on Windows)", "; ".join(sorted(stray)))
 
 failed = results.count(False)

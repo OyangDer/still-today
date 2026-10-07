@@ -81,7 +81,7 @@ if paper:
     time.sleep(3)
 probe.js("document.querySelector('.back')?.click();")
 time.sleep(0.6)
-probe.js("[...document.querySelectorAll('.theme')].find(b => /Aura/.test(b.textContent))?.click();")
+probe.js("const a = document.querySelector('.toggle.aurora'); if (a && a.getAttribute('aria-checked') !== 'true') a.click(); [...document.querySelectorAll('.theme')].find(b => /跟随系统|System/.test(b.textContent))?.click();")
 probe.js("document.querySelector('.back')?.click();")
 time.sleep(0.6)
 tab(probe, 0)
