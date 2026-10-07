@@ -8,9 +8,7 @@ use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
-#[cfg(not(target_os = "macos"))]
-use tauri::LogicalPosition;
-use tauri::{AppHandle, LogicalSize, Manager, WebviewWindow};
+use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, WebviewWindow};
 
 // The desktop grid a dropped widget settles onto. Keep in step with host/WidgetForm.cs.
 const MARGIN: f64 = 20.0;
@@ -173,24 +171,8 @@ fn snap(value: f64, start: f64, end: f64, length: f64) -> f64 {
     (min + ((value - min) / STEP).round() * STEP).min(max)
 }
 
-// Size and place together, in one frame: set apart, the Mac draws the window once at the new size
-// still on its old bottom-left corner, and the morph jitters.
-#[cfg(target_os = "macos")]
 fn put(window: &WebviewWindow, r: Rect) {
-    use objc2::MainThreadMarker;
-    use objc2_app_kit::{NSScreen, NSWindow};
-    use objc2_foundation::{NSPoint, NSRect, NSSize};
-    let (Ok(ns), Some(mtm)) = (window.ns_window(), MainThreadMarker::new()) else { return };
-    // Points from the top of the primary display, as Tauri counts them; Cocoa counts from its bottom.
-    let Some(primary) = NSScreen::screens(mtm).firstObject() else { return };
-    let top = primary.frame().size.height;
-    // SAFETY: as in `dress`.
-    let ns = unsafe { &*(ns as *const NSWindow) };
-    ns.setFrame_display(NSRect::new(NSPoint::new(r.x, top - r.y - r.h), NSSize::new(r.w, r.h)), true);
-}
-
-#[cfg(not(target_os = "macos"))]
-fn put(window: &WebviewWindow, r: Rect) {
+    // Size, then the top-left: the Mac keeps a window's bottom-left corner through a resize.
     let _ = window.set_size(LogicalSize::new(r.w, r.h));
     let _ = window.set_position(LogicalPosition::new(r.x, r.y));
 }
@@ -357,28 +339,19 @@ fn animate(app: &AppHandle, window: WebviewWindow, from: Rect, to: Rect, start: 
         if wait > 0.0 {
             std::thread::sleep(Duration::from_secs_f64(wait / 1000.0));
         }
-        // One step in flight at a time: when the main thread falls behind, steps are dropped rather
-        // than queued, so the window never plays back a backlog of stale frames.
-        let busy = std::sync::Arc::new(AtomicBool::new(false));
         loop {
             if widget(&app).animation.load(Ordering::SeqCst) != generation {
                 return;
             }
             let t = ((now_ms() - start) / ms).clamp(0.0, 1.0);
-            if t < 1.0 && busy.load(Ordering::Acquire) {
-                std::thread::sleep(Duration::from_millis(4));
-                continue;
-            }
             let e = ease(t);
             let lerp = |a: f64, b: f64| a + (b - a) * e;
             let frame = Rect { x: lerp(from.x, to.x), y: lerp(from.y, to.y), w: lerp(from.w, to.w), h: lerp(from.h, to.h) };
-            let (app2, win, done) = (app.clone(), window.clone(), busy.clone());
-            busy.store(true, Ordering::Release);
+            let (app2, win) = (app.clone(), window.clone());
             let _ = window.run_on_main_thread(move || {
                 if widget(&app2).animation.load(Ordering::SeqCst) == generation {
                     put(&win, frame);
                 }
-                done.store(false, Ordering::Release);
             });
             if t >= 1.0 {
                 let win = window.clone();
