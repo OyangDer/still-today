@@ -16,6 +16,11 @@
   let seconds = $state(app.data.settings.focusSeconds);
   // Digits roll up while a length grows and down while it shrinks or counts down.
   let roll = $state(1);
+  // A step that lands while the last one is still rolling swaps the digits without a roll, so a fast
+  // scroll or drag never stacks several digits in one slot.
+  const ROLL = 260;
+  let steppedAt = 0;
+  let instant = $state(false);
   let wheelDelta = 0;
   let task = $state<string | null>(app.focusTarget);
   let picking = $state(false);
@@ -41,6 +46,7 @@
   const progress = $derived(phase === 'finished' ? 1 : timer ? 1 - left / timer.duration : 0);
   const segments = $derived([Math.floor(left / 3600), Math.floor(left / 60) % 60, left % 60].map((n) => String(n).padStart(2, '0')));
   const direction = $derived(phase === 'idle' ? roll : -1);
+  const rollMs = $derived(phase === 'idle' && instant ? 0 : ROLL);
   const unitNames = ['focus.hours', 'focus.minutes', 'focus.seconds'] as const;
   const choices = $derived(todos(app.data).filter((i) => !i.done).sort(byDue));
   // A task finished or deleted since it was chosen is no longer on offer.
@@ -64,6 +70,8 @@
     const next = Math.max(1, Math.min(MAX, Math.round(value)));
     if (next === seconds) return;
     roll = next > seconds ? 1 : -1;
+    instant = performance.now() - steppedAt < ROLL;
+    steppedAt = performance.now();
     seconds = next;
   }
 
@@ -166,7 +174,7 @@
             {#each segment.split('') as digit, i (i)}
               <span class="slot">
                 {#key digit}
-                  <span class="digit" in:move={{ y: 22 * direction, duration: 260, easing: easeOut }} out:move={{ y: -18 * direction, duration: 160, easing: easeIn }}>{digit}</span>
+                  <span class="digit" in:move={{ y: 22 * direction, duration: rollMs, easing: easeOut }} out:move={{ y: -18 * direction, duration: rollMs && 160, easing: easeIn }}>{digit}</span>
                 {/key}
               </span>
             {/each}
