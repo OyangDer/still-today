@@ -147,10 +147,10 @@
   </div>
 
   <div class="list scroll" bind:this={list}>
-    <!-- A filter change swaps the whole list: the old one fades in place while the new one rises
-         into the same grid cell, so the two never stack or reflow each other. -->
+    <!-- A filter or course change swaps the whole list: the old one fades in place while the new one
+         rises into the same grid cell, so the two never stack or reflow each other. -->
     <div class="stack">
-      {#key filter}
+      {#key `${filter}:${active}`}
         <div class="page" in:move={{ y: 8, duration: 280, delay: 90, easing: easeOut }} out:fade={{ duration: 110 }}>
           {#each entries as entry (entry.key)}
             <div class="entry" class:head={entry.kind === 'head'} animate:flip={{ duration: isReduced() ? 0 : 420, easing: easeMorph }} in:move={{ y: 6, duration: 280, easing: easeOut }} out:move={{ x: 24, duration: 200, easing: easeIn }}>

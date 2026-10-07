@@ -37,6 +37,8 @@
     if (Number.isNaN(n)) return;
     if (part === 'h') set(Math.min(23, n), minutes);
     else set(hours, Math.min(59, n));
+    // When the clamp lands on the value already held, nothing re-renders and the typed "25" would stay.
+    input.value = pad(part === 'h' ? hours : minutes);
   }
 </script>
 
