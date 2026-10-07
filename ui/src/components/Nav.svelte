@@ -38,12 +38,11 @@
   $effect(() => {
     const x = centre(frame.w, index) - PILL / 2;
     const to = `translate3d(${x}px, 0, 0)`;
-    const ms = placed === frame ? PILL_MS : frame.ms;
-    if (placed === frame) follow(pill!, to, Date.now(), PILL_MS);
-    else follow(pill!, to, frame.start, frame.ms);
+    const [start, ms] = placed === frame ? [Date.now(), PILL_MS] : [frame.start, frame.ms];
+    follow(pill!, to, start, ms);
     placed = frame;
-    // On macOS 26 the Mac draws the pill in Liquid Glass, just behind the page.
-    if (app.liquid) void call('pill', { x, ms, show: liquid && !app.tabBarAway });
+    // On macOS 26 the Mac draws the pill in Liquid Glass, just behind the page, on the same timeline.
+    if (app.liquid) void call('pill', { x, start, ms, show: liquid && !app.tabBarAway });
   });
 
   const liquid = $derived(app.liquid && app.data.settings.theme === 'aura');

@@ -89,13 +89,21 @@ pub fn pill(webview: *mut std::ffi::c_void, request: &Value) -> Value {
         return json!({ "ok": true });
     }
     let seconds = ms / 1000.0;
-    // One unbroken move that runs just past the tab and back.
+    // In step with the page: its curve (MORPH_CURVE in ui/src/lib/motion.ts), its duration, and
+    // what is left of it once the call arrives, so the glass moves with the labels and the window.
     if request["style"].as_str() != Some("stretch") {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64() * 1000.0).unwrap_or(0.0);
+        let left = request["start"].as_f64().map_or(ms, |start| ms - (now - start).max(0.0));
+        if left <= 16.0 {
+            pill.setFrame(to);
+            return json!({ "ok": true });
+        }
+        let seconds = left / 1000.0;
         let target = pill.clone();
         let changes = RcBlock::new(move |context: NonNull<NSAnimationContext>| {
             let context = unsafe { context.as_ref() };
             context.setDuration(seconds);
-            context.setTimingFunction(Some(&CAMediaTimingFunction::functionWithControlPoints(0.25, 1.2, 0.4, 1.0)));
+            context.setTimingFunction(Some(&CAMediaTimingFunction::functionWithControlPoints(0.22, 0.8, 0.22, 1.0)));
             target.animator().setFrame(to);
         });
         NSAnimationContext::runAnimationGroup(&changes);
