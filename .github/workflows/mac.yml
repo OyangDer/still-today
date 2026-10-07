@@ -45,6 +45,28 @@ jobs:
         working-directory: mac
         run: cargo test
 
+      # One fixed, self-made identity, so every build is the same app to the Keychain and "Always
+      # Allow" holds across updates. It is not Apple's, so Gatekeeper still asks once. Without the
+      # secrets (a fork), the build stays ad hoc.
+      - name: Signing identity
+        env:
+          P12: ${{ secrets.MAC_SIGNING_P12 }}
+          PASSWORD: ${{ secrets.MAC_SIGNING_PASSWORD }}
+        run: |
+          [ -n "$P12" ] || exit 0
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          security create-keychain -p ci "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p ci "$keychain"
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/signing.p12"
+          security import "$RUNNER_TEMP/signing.p12" -k "$keychain" -P "$PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/signing.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          security find-identity -p codesigning "$keychain"
+          # "Still Today Developer", by its SHA-1, which codesign takes whether or not the system trusts it.
+          echo "APPLE_SIGNING_IDENTITY=295A3D46D0543329ACDF1B9ACBE00BE31825F3A9" >> "$GITHUB_ENV"
+
       - name: Universal app and .dmg
         working-directory: mac
         run: npx --yes @tauri-apps/cli@2 build --target universal-apple-darwin
@@ -66,6 +88,9 @@ jobs:
           screencapture -x shots/finder.png
           sw_vers > shots/system.txt
           lipo -archs "mac/target/universal-apple-darwin/release/bundle/macos/Still Today.app/Contents/MacOS/"* >> shots/system.txt
+          # Who signed it, and what the Keychain will hold later versions to.
+          codesign -dvv "mac/target/universal-apple-darwin/release/bundle/macos/Still Today.app" >> shots/system.txt 2>&1
+          codesign -dr - "mac/target/universal-apple-darwin/release/bundle/macos/Still Today.app" >> shots/system.txt 2>&1
 
       - uses: actions/upload-artifact@v4
         with:
