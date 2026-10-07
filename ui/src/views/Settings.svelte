@@ -167,7 +167,7 @@
       <h3>{t('settings.appearance')}</h3>
       <!-- Aura lays the desktop under whichever of light and dark is chosen; each card previews both together. -->
       <div class="toggles">
-        <Toggle checked={app.data.settings.aura} label={t('settings.aura')} onchange={(aura) => app.setAppearance({ aura })} />
+        <Toggle aurora checked={app.data.settings.aura} label={t('settings.aura')} onchange={(aura) => app.setAppearance({ aura })} />
       </div>
       <div class="themes">
         {#each MODES as mode (mode)}
