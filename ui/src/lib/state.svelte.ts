@@ -65,6 +65,8 @@ class Store {
   /** Whether Windows blurs behind the widget; Aura stands in for the blur when it does not. */
   glass = $state(true);
   autostart = $state(false);
+  /** Liquid Glass behind Aura and as the tab bar's selection, from the Mac host on macOS 26. */
+  liquid = $state(false);
   /** Running in the Mac host, which words a few things its own way. */
   mac = $state(false);
   /** Whether the window eases between sizes; null where the host has no switch for it. */
@@ -99,6 +101,9 @@ class Store {
     this.autostart = info.autostart;
     this.canvasAvatar = info.canvasAvatar;
     this.glass = info.glass;
+    this.liquid = info.liquid ?? false;
+    // Liquid Glass follows the system's light or dark appearance, and the ink follows the glass.
+    if (this.liquid) matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => this.applyTheme());
     this.mac = info.platform === 'macos';
     // Styles that only the Mac's fonts need key off this.
     if (this.mac) document.documentElement.dataset.os = 'mac';
@@ -226,12 +231,21 @@ class Store {
     const root = document.documentElement;
     root.dataset.theme = theme;
     const look = auraLook(this.aura);
-    if (theme === 'aura') {
+    const liquid = theme === 'aura' && this.liquid;
+    root.dataset.liquid = liquid ? 'on' : 'off';
+    if (liquid) {
+      root.dataset.ink = matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark';
+      root.dataset.glass = 'on';
+      root.style.setProperty('--scrim', 'transparent');
+      root.style.setProperty('--sheen', 'none');
+    } else if (theme === 'aura') {
+      root.style.removeProperty('--sheen');
       root.dataset.ink = look.ink;
       root.dataset.glass = this.glass ? 'on' : 'off';
       root.style.setProperty('--scrim', look.scrim);
       root.style.setProperty('--aura-fill', look.fill);
     } else {
+      root.style.removeProperty('--sheen');
       delete root.dataset.ink;
     }
     void call('material', {

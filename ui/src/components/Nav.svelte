@@ -1,5 +1,6 @@
 <script lang="ts">
   import { todos } from '../lib/agenda';
+  import { call } from '../lib/host';
   import { app, TABS } from '../lib/state.svelte';
   import { t } from '../lib/i18n';
   import { fade, follow, type Frame } from '../lib/motion';
@@ -35,14 +36,20 @@
 
   // The pill travels with the window when a tab change resizes it, and on its own otherwise.
   $effect(() => {
-    const to = `translate3d(${centre(frame.w, index) - PILL / 2}px, 0, 0)`;
+    const x = centre(frame.w, index) - PILL / 2;
+    const to = `translate3d(${x}px, 0, 0)`;
+    const ms = placed === frame ? PILL_MS : frame.ms;
     if (placed === frame) follow(pill!, to, Date.now(), PILL_MS);
     else follow(pill!, to, frame.start, frame.ms);
     placed = frame;
+    // On macOS 26 the Mac draws the pill in Liquid Glass, just behind the page.
+    if (app.liquid) void call('pill', { x, ms, show: liquid && !app.tabBarAway });
   });
+
+  const liquid = $derived(app.liquid && app.data.settings.theme === 'aura');
 </script>
 
-<div class="band" class:away={app.tabBarAway} bind:this={band} role="tablist">
+<div class="band" class:away={app.tabBarAway} class:liquid bind:this={band} role="tablist">
   <span class="pill" bind:this={pill}></span>
   {#each TABS as tab, i (tab)}
     <button
@@ -86,6 +93,16 @@
     pointer-events: none;
   }
 
+  /* The Mac's Liquid Glass stands in for the bar's ground and its pill. */
+  .band.liquid {
+    background: transparent;
+    border-top-color: transparent;
+  }
+
+  .band.liquid .pill {
+    visibility: hidden;
+  }
+
   .band.away .pill,
   .band.away button {
     opacity: 0;
@@ -100,7 +117,7 @@
     position: absolute;
     top: 7px;
     height: 38px;
-    border-radius: 11px;
+    border-radius: 14px;
   }
 
   .pill {

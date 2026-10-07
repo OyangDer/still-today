@@ -6,6 +6,7 @@
 // that tints Aura (phase 2).
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod glass;
 mod http;
 #[cfg(feature = "probe")]
 mod probe;
@@ -86,6 +87,7 @@ fn boot(app: &AppHandle, host: &Host) -> Result<Value, String> {
         "canvasHost": secrets::canvas()?.map(|(host, _)| host),
         "canvasAvatar": read_or_null(&host.avatar()),
         "glass": widget::glass(),
+        "liquid": glass::available(),
         "platform": std::env::consts::OS,
         "morph": host.widget.morph.load(std::sync::atomic::Ordering::Relaxed),
     }))
@@ -322,6 +324,13 @@ async fn bridge(app: AppHandle, window: WebviewWindow, host: State<'_, Host>, m:
             let (aura, dark) = (p["aura"].as_bool().unwrap_or(true), p["dark"].as_bool().unwrap_or(false));
             let target = window.clone();
             let _ = window.run_on_main_thread(move || widget::material(&target, aura, dark));
+            Ok(Value::Null)
+        }
+        // The tab bar's selection, in Liquid Glass behind the page: {x, ms, show}.
+        "pill" => {
+            let _ = window.with_webview(move |webview| {
+                let _ = glass::pill(webview.inner(), &p);
+            });
             Ok(Value::Null)
         }
         "topmost" => {

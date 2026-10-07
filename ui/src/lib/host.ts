@@ -28,6 +28,8 @@ export interface BootInfo {
   canvasAvatar: string | null;
   /** Whether Windows blurs behind the widget; energy saver and the Transparency switch stop it. */
   glass: boolean;
+  /** Whether the Mac draws Liquid Glass (macOS 26 and later) behind Aura and under the tab bar's selection. */
+  liquid?: boolean;
   /** The OS as Rust names it ("macos", "windows"); only the Tauri host sends it. */
   platform?: string;
   /** Whether the window eases between sizes; only the Tauri host offers the switch. */
