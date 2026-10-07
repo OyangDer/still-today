@@ -119,9 +119,10 @@
     } else canvasError = t(result === 'badHost' ? 'canvas.badHost' : result === 'rejected' ? 'canvas.rejected' : 'canvas.offline');
   }
 
-  // Disconnecting drops every synced assignment and removing a feed forgets its link, and neither
-  // can be undone, so each takes a second, deliberate click on the same button.
+  // Removing a feed forgets its link and cannot be undone, so it takes a second, deliberate click
+  // on the same button.
   let armed = $state<string | null>(null);
+  let disconnecting = $state(false);
   let armTimer = 0;
   function confirm(what: string, run: () => void) {
     clearTimeout(armTimer);
@@ -197,10 +198,19 @@
             <span class="name ellipsis">{app.data.canvas.user}</span>
             <span class="sub ellipsis">{app.data.canvas.host}{canvasSync ? ` · ${t('sync.last', { t: timeOrDate(canvasSync, app.now) })}` : ''}</span>
           </span>
-          <button class="text-btn danger" class:armed={armed === 'canvas'} onclick={() => confirm('canvas', () => void app.disconnectCanvas())}>
-            {t(armed === 'canvas' ? 'canvas.confirm' : 'canvas.disconnect')}
+          <button class="text-btn" class:danger={!disconnecting} onclick={() => (disconnecting = !disconnecting)}>
+            {t(disconnecting ? 'cancel' : 'canvas.disconnect')}
           </button>
         </div>
+        <!-- Disconnecting drops every synced assignment and what the student marked on it, for good. It
+             says so first, and the button that does it sits away from the one that asked, so a double
+             click lands on Cancel. -->
+        {#if disconnecting}
+          <div class="disconnect" in:fade={{ duration: 200 }}>
+            <p class="hint error">{t('canvas.warn')}</p>
+            <button class="text-btn armed" onclick={() => ((disconnecting = false), void app.disconnectCanvas())}>{t('canvas.confirm')}</button>
+          </div>
+        {/if}
         {#if app.data.canvas.error === 'token'}<p class="hint error">{t('sync.token')}</p>{/if}
         <div class="line">
           <span>{t('canvas.token')}</span>
@@ -623,6 +633,17 @@
   .text-btn.armed:hover {
     color: var(--raised);
     background: var(--danger);
+  }
+
+  .disconnect {
+    display: grid;
+    justify-items: start;
+    gap: 8px;
+    padding: 0 6px 10px;
+  }
+
+  .disconnect .hint {
+    padding: 0;
   }
 
   .connect {
