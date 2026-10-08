@@ -244,9 +244,13 @@ class Store {
       root.dataset.ink = dark ? 'light' : 'dark';
       root.dataset.glass = 'on';
       // The look alone decides how the card looks; the system's only decides which look auto is. Clear
-      // glass takes a veil of the look's own colour, so the ink reads the same over any desktop.
-      const veil = dark ? 'rgba(20, 20, 24, 0.3)' : 'rgba(250, 250, 252, 0.4)';
-      root.style.setProperty('--scrim', this.data.settings.clearGlass ? veil : 'transparent');
+      // glass takes a veil of the look's own colour, so the ink reads the same over any desktop. Light
+      // frosted glass alone is barely whiter than light clear, so it takes a heavier one to tell them apart.
+      const clear = this.data.settings.clearGlass;
+      const veil = dark
+        ? clear ? 'rgba(20, 20, 24, 0.3)' : 'transparent'
+        : `rgba(250, 250, 252, ${clear ? 0.18 : 0.5})`;
+      root.style.setProperty('--scrim', veil);
       root.style.setProperty('--sheen', 'none');
     } else if (aura) {
       const look = auraLook(this.aura, dark ? 'light' : 'dark');
