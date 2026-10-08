@@ -169,6 +169,7 @@
             aria-valuenow={Number(segment)}
             onwheel={(e) => wheel(e, UNITS[s])}
             onpointerdown={(e) => drag(e, UNITS[s])}
+            onmousedown={(e) => e.preventDefault()}
             onkeydown={(e) => key(e, UNITS[s])}
           >
             {#each segment.split('') as digit, i (i)}

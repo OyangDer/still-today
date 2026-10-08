@@ -75,6 +75,22 @@ webview?.addEventListener('message', (e) => dispatch(e.data as Parameters<typeof
 void tauri?.event.listen('host', (e) => dispatch(e.payload as Parameters<typeof dispatch>[0]));
 // WKWebView has its own context menu (Reload among it), which the WebView2 host turns off natively.
 if (tauri) addEventListener('contextmenu', (e) => e.preventDefault());
+// WKWebView can still select text styled unselectable (Look Up on a force click, for one), so only text
+// meant to be copied may begin a selection, and one that lands anywhere else is let go.
+if (tauri) {
+  const fixed = (node: Node | null) => {
+    const el = node instanceof Element ? node : node?.parentElement;
+    return !el || getComputedStyle(el).getPropertyValue('-webkit-user-select') === 'none';
+  };
+  addEventListener('selectstart', (e) => {
+    if (fixed(e.target as Node)) e.preventDefault();
+  });
+  document.addEventListener('selectionchange', () => {
+    const selection = getSelection();
+    if (!selection || selection.isCollapsed || document.activeElement?.matches('input, textarea')) return;
+    if (fixed(selection.anchorNode)) selection.removeAllRanges();
+  });
+}
 
 let mock: ((m: string, p: Record<string, unknown>) => Promise<unknown>) | null = null;
 let demo: ((m: string, p: Record<string, unknown>) => Promise<unknown>) | null = null;
