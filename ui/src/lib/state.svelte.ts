@@ -243,9 +243,9 @@ class Store {
     if (liquid) {
       root.dataset.ink = dark ? 'light' : 'dark';
       root.dataset.glass = 'on';
-      // Clear glass shows the desktop as it is, light or dark whatever look is chosen: a chosen look
-      // shades it toward itself, so the ink stays readable over any wallpaper.
-      const shade = mode !== 'auto' && this.data.settings.clearGlass;
+      // Clear glass shows the desktop as the system's look leaves it: a chosen look against the
+      // system's shades it toward itself, so the ink stays readable; one that matches looks as auto does.
+      const shade = this.data.settings.clearGlass && dark !== matchMedia('(prefers-color-scheme: dark)').matches;
       root.style.setProperty('--scrim', shade ? (dark ? 'rgba(20, 20, 24, 0.45)' : 'rgba(250, 250, 252, 0.55)') : 'transparent');
       root.style.setProperty('--sheen', 'none');
     } else if (aura) {
