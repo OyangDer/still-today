@@ -135,15 +135,20 @@ fn state(window: &WebviewWindow) -> Value {
     let s = window.scale_factor().unwrap_or(1.0);
     let p = window.outer_position().map(|p| (p.x as f64 / s, p.y as f64 / s)).unwrap_or_default();
     let z = window.outer_size().map(|z| (z.width as f64 / s, z.height as f64 / s)).unwrap_or_default();
-    let work = window.primary_monitor().ok().flatten().map(|m| {
+    let monitor = window.primary_monitor().ok().flatten();
+    let work = monitor.as_ref().map(|m| {
         let (a, s) = (m.work_area(), m.scale_factor());
         json!({ "x": a.position.x as f64 / s, "y": a.position.y as f64 / s, "w": a.size.width as f64 / s, "h": a.size.height as f64 / s })
+    });
+    let screen = monitor.as_ref().map(|m| {
+        let (p, z, s) = (m.position(), m.size(), m.scale_factor());
+        json!({ "x": p.x as f64 / s, "y": p.y as f64 / s, "w": z.width as f64 / s, "h": z.height as f64 / s })
     });
     let (level, behavior) = level(window);
     json!({
         "x": p.0, "y": p.1, "w": z.0, "h": z.1, "scale": s,
         "visible": window.is_visible().unwrap_or(false),
-        "work": work, "level": level, "behavior": behavior,
+        "work": work, "screen": screen, "level": level, "behavior": behavior,
     })
 }
 

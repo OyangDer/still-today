@@ -20,7 +20,9 @@ STORE = os.path.expanduser("~/Library/Application Support/app.stilltoday.widget"
 # status level, not floating's 3; anything above 0 keeps it over other windows).
 BELOW, NORMAL = -1, 0
 CAN_JOIN_ALL_SPACES = 1
-MARGIN, STEP = 20, 24
+# The grid a dropped widget settles on: on the Mac the system's own widget grid, 16pt in from the
+# desktop's edges in 180pt steps counted from the nearer edge; on Windows 20pt in, in 24pt steps.
+MARGIN, STEP = (16, 180) if MAC else (20, 24)
 
 results = []
 
@@ -70,6 +72,8 @@ def near(a, b, tolerance=1.0):
 
 def on_grid(value, start, end, length):
     low, high = start + MARGIN, end - MARGIN - length
+    if MAC:
+        return any(near(steps, round(steps), 0.01) for steps in ((value - low) / STEP, (high - value) / STEP))
     steps = (value - low) / STEP
     return near(value, low) or near(value, high) or near(steps, round(steps), 0.01)
 
@@ -182,9 +186,12 @@ probe.native("settle")
 time.sleep(0.9)
 s = probe.native("state")
 saved = json.load(open(os.path.join(STORE, "window.json"))) if STORE else {}
-check(on_grid(s["x"], work["x"], work["x"] + work["w"], s["w"]) and on_grid(s["y"], work["y"], work["y"] + work["h"], s["h"])
+# The Mac's grid runs down to the display's foot, behind the Dock, as the system's widgets do.
+screen = s.get("screen") or work
+desk = {"x": screen["x"], "y": work["y"], "w": screen["w"], "h": screen["y"] + screen["h"] - work["y"]} if MAC else work
+check(on_grid(s["x"], desk["x"], desk["x"] + desk["w"], s["w"]) and on_grid(s["y"], desk["y"], desk["y"] + desk["h"], s["h"])
       and near(saved.get("x", -1), s["x"]) and near(saved.get("y", -1), s["y"]),
-      "drop settles on the 24pt grid and is saved", f"{before['x']:.1f},{before['y']:.1f} → {s['x']:.1f},{s['y']:.1f}, window.json {saved}")
+      f"drop settles on the {STEP}pt grid and is saved", f"{before['x']:.1f},{before['y']:.1f} → {s['x']:.1f},{s['y']:.1f}, window.json {saved}")
 
 # Keep on top, and back under.
 probe.call("topmost", {"on": True})
