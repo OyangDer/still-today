@@ -71,6 +71,15 @@ jobs:
         working-directory: mac
         run: npx --yes @tauri-apps/cli@2 build --target universal-apple-darwin
 
+      # The download to offer: unlike the .dmg it meets Gatekeeper once, and the app moves itself
+      # into Applications (src/install.rs). ditto keeps the bundle's signature intact.
+      - name: .zip
+        working-directory: mac/target/universal-apple-darwin/release/bundle
+        run: |
+          dmg=$(ls dmg/*.dmg)
+          mkdir zip
+          ditto -c -k --keepParent "macos/Still Today.app" "zip/$(basename "${dmg%.dmg}").zip"
+
       # First run puts the widget in the top-right corner of the main display.
       - name: Screenshots
         run: |
@@ -94,8 +103,10 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: still-today-mac-dmg
-          path: mac/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          name: still-today-mac
+          path: |
+            mac/target/universal-apple-darwin/release/bundle/zip/*.zip
+            mac/target/universal-apple-darwin/release/bundle/dmg/*.dmg
       # The same checks the Windows trial build gets over CDP, through a build with the test probe.
       - name: Mac check
         run: |

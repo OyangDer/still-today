@@ -130,6 +130,7 @@ class Store {
       void this.setAutostart(true);
     }
     setLang(this.data.settings.lang);
+    if (info.installed) this.notify(t('app.installed'));
 
     on('aura', (d) => {
       this.aura = d as AuraSample;

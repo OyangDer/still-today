@@ -8,6 +8,8 @@
 
 mod glass;
 mod http;
+#[cfg(target_os = "macos")]
+mod install;
 #[cfg(feature = "probe")]
 mod probe;
 mod secrets;
@@ -90,6 +92,8 @@ fn boot(app: &AppHandle, host: &Host) -> Result<Value, String> {
         "liquid": glass::available(),
         "platform": std::env::consts::OS,
         "morph": host.widget.morph.load(std::sync::atomic::Ordering::Relaxed),
+        // Started again from Applications by install::relocate.
+        "installed": std::env::args().any(|a| a == "--installed"),
     }))
 }
 
@@ -392,6 +396,8 @@ fn own_page(url: &Url) -> bool {
 }
 
 fn main() {
+    #[cfg(target_os = "macos")]
+    install::relocate();
     let builder = tauri::Builder::default()
         // A second launch brings the running widget forward instead of starting another.
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {

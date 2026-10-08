@@ -32,6 +32,8 @@ export interface BootInfo {
   liquid?: boolean;
   /** The OS as Rust names it ("macos", "windows"); only the Tauri host sends it. */
   platform?: string;
+  /** Whether this start is the Mac copy that has just moved itself into Applications. */
+  installed?: boolean;
   /** Whether the window eases between sizes; only the Tauri host offers the switch. */
   morph?: boolean;
 }
