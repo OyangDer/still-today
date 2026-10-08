@@ -407,6 +407,12 @@ fn own_page(url: &Url) -> bool {
 fn main() {
     #[cfg(target_os = "macos")]
     install::relocate();
+    // After an update the Keychain asks before it hands over the token, and the boot call waits on that.
+    // A hidden page left waiting that long never takes the reply until something runs in it, so the
+    // widget would never appear: the question is asked here instead, before there is a page.
+    if !demo() {
+        let _ = secrets::canvas();
+    }
     let builder = tauri::Builder::default()
         // A second launch brings the running widget forward instead of starting another.
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
