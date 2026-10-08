@@ -79,13 +79,25 @@
   // A press on anything that is not a control moves the widget, as in the WPF release. The host
   // runs the native move loop, so dragging across monitors and DPI changes behave like any window.
   const CONTROLS = 'button, a, input, textarea, select, label, [role=button], [role=tab], [role=spinbutton], [tabindex]:not([tabindex="-1"])';
-  function press(e: PointerEvent) {
-    if (e.button !== 0 || app.data.settings.locked) return;
+  function moves(e: MouseEvent): boolean {
+    if (e.button !== 0 || app.data.settings.locked) return false;
     const target = e.target as HTMLElement;
-    if (target.closest(CONTROLS)) return;
+    if (target.closest(CONTROLS)) return false;
     // Presses on a scrollbar scroll.
-    if (target.scrollHeight > target.clientHeight && e.offsetX >= target.clientWidth) return;
-    void call('drag');
+    return !(target.scrollHeight > target.clientHeight && e.offsetX >= target.clientWidth);
+  }
+  function press(e: PointerEvent) {
+    if (moves(e)) void call('drag');
+  }
+  // The press that moves the widget mustn't also begin a text selection: a fast drag outruns the
+  // window, and WebKit, still holding the button, selects the text the pointer crosses. Holding the
+  // press back also keeps focus where it was, so a field being edited is let go here instead.
+  function hold(e: MouseEvent) {
+    const target = e.target as HTMLElement;
+    if (!moves(e) || getComputedStyle(target).getPropertyValue('-webkit-user-select') !== 'none') return;
+    e.preventDefault();
+    const field = document.activeElement;
+    if (field instanceof HTMLElement && field.matches('input, textarea')) field.blur();
   }
 
   // The stage's bottom edge rides the nav bar while its content holds still, so nothing slides
@@ -99,7 +111,7 @@
   });
 </script>
 
-<svelte:window onpointerdown={press} />
+<svelte:window onpointerdown={press} onmousedown={hold} />
 
 {#key app.data.settings.lang}
   <div
