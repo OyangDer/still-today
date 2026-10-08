@@ -21,7 +21,36 @@ pub fn apply(window: &WebviewWindow, radius: f64, clear: bool) -> bool {
     use window_vibrancy::{apply_liquid_glass, clear_liquid_glass, LiquidGlassOptions, NSGlassEffectViewStyle};
     let _ = clear_liquid_glass(window);
     let style = if clear { NSGlassEffectViewStyle::Clear } else { NSGlassEffectViewStyle::Regular };
-    available() && apply_liquid_glass(window, LiquidGlassOptions::new(style).radius(radius)).is_ok()
+    available() && apply_liquid_glass(window, LiquidGlassOptions::new(style).radius(radius)).is_ok() && {
+        keep_active(window);
+        true
+    }
+}
+
+/// AppKit dulls the glass of a window that is not key, the clear variant to near frosted, and a desktop
+/// widget is key only while clicked. Its window keeps the active look, as the system's widgets do.
+#[cfg(target_os = "macos")]
+fn keep_active(window: &WebviewWindow) {
+    use objc2::ffi::{class_getInstanceMethod, class_replaceMethod, method_getTypeEncoding};
+    use objc2::runtime::{AnyClass, AnyObject, Bool, Imp, Sel};
+    use objc2::sel;
+
+    extern "C-unwind" fn yes(_: &AnyObject, _: Sel) -> Bool {
+        Bool::YES
+    }
+    let Ok(ns) = window.ns_window() else { return };
+    // SAFETY: Tauri hands back the window's live NSWindow; its class is Tauri's own NSWindow subclass, so
+    // the override reaches only its windows. A selector this AppKit lacks is left alone.
+    unsafe {
+        let class = (*(ns as *const AnyObject)).class() as *const AnyClass;
+        for name in [sel!(_hasActiveAppearance), sel!(_hasActiveAppearanceIgnoringKeyFocus)] {
+            let method = class_getInstanceMethod(class, name);
+            if !method.is_null() {
+                let imp: Imp = std::mem::transmute(yes as extern "C-unwind" fn(&AnyObject, Sel) -> Bool);
+                class_replaceMethod(class as *mut AnyClass, name, imp, method_getTypeEncoding(method));
+            }
+        }
+    }
 }
 
 #[cfg(target_os = "macos")]
