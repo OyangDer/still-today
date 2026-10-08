@@ -3,7 +3,8 @@
   "productName": "Still Today",
   "identifier": "app.stilltoday.widget",
   "build": {
-    "frontendDist": "../ui/dist"
+    "frontendDist": "../ui/dist",
+    "beforeBundleCommand": "cd \"$(git rev-parse --show-toplevel)/mac/dmg\" && tiffutil -cathidpicheck background.png background@2x.png -out background.tiff"
   },
   "app": {
     "withGlobalTauri": true,
@@ -40,7 +41,22 @@
     ],
     "macOS": {
       "minimumSystemVersion": "13.0",
-      "signingIdentity": "-"
+      "signingIdentity": "-",
+      "dmg": {
+        "background": "dmg/background.tiff",
+        "windowSize": {
+          "width": 660,
+          "height": 400
+        },
+        "appPosition": {
+          "x": 180,
+          "y": 170
+        },
+        "applicationFolderPosition": {
+          "x": 480,
+          "y": 170
+        }
+      }
     }
   }
 }

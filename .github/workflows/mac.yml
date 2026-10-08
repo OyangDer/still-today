@@ -72,8 +72,13 @@ jobs:
           # "Still Today Developer", by its SHA-1, which codesign takes whether or not the system trusts it.
           echo "APPLE_SIGNING_IDENTITY=295A3D46D0543329ACDF1B9ACBE00BE31825F3A9" >> "$GITHUB_ENV"
 
+      # On CI Tauri skips the Finder script that lays out the .dmg window (background, icon places);
+      # this runner has a Finder to run it in.
       - name: Universal app and .dmg
         working-directory: mac
+        timeout-minutes: 20
+        env:
+          TAURI_BUNDLER_DMG_IGNORE_CI: "true"
         run: npx --yes @tauri-apps/cli@2 build --target universal-apple-darwin
 
       # The download to offer: unlike the .dmg it meets Gatekeeper once, and the app moves itself
@@ -100,6 +105,13 @@ jobs:
           open -R "mac/target/universal-apple-darwin/release/bundle/macos/Still Today.app"
           sleep 4
           screencapture -x shots/finder.png
+          # The .dmg's window as a tester first sees it.
+          osascript -e 'tell application "Finder" to close every window' || true
+          hdiutil attach mac/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          open "/Volumes/Still Today"
+          sleep 4
+          screencapture -x shots/dmg.png
+          hdiutil detach "/Volumes/Still Today" || true
           sw_vers > shots/system.txt
           lipo -archs "mac/target/universal-apple-darwin/release/bundle/macos/Still Today.app/Contents/MacOS/"* >> shots/system.txt
           # Who signed it, and what the Keychain will hold later versions to.
