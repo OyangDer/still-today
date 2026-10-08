@@ -17,11 +17,17 @@ pub fn available() -> bool {
 /// Liquid Glass behind the page, clipped to the widget's corner: clear as the system's widgets are, or
 /// frosted. False where there is none.
 #[cfg(target_os = "macos")]
-pub fn apply(window: &WebviewWindow, radius: f64, clear: bool) -> bool {
+pub fn apply(window: &WebviewWindow, radius: f64, clear: bool, dark: bool) -> bool {
     use window_vibrancy::{apply_liquid_glass, clear_liquid_glass, LiquidGlassOptions, NSGlassEffectViewStyle};
     let _ = clear_liquid_glass(window);
     let style = if clear { NSGlassEffectViewStyle::Clear } else { NSGlassEffectViewStyle::Regular };
-    available() && apply_liquid_glass(window, LiquidGlassOptions::new(style).radius(radius)).is_ok() && {
+    let mut options = LiquidGlassOptions::new(style).radius(radius);
+    // Dark frosted glass alone is a milky grey; the system's widgets are near black with the wallpaper's
+    // hue showing through, matched beside them on macOS 27.
+    if !clear && dark {
+        options = options.tint_color((0, 0, 0, 125));
+    }
+    available() && apply_liquid_glass(window, options).is_ok() && {
         keep_active(window);
         true
     }
