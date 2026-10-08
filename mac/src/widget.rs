@@ -10,9 +10,11 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use serde_json::{json, Value};
 use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, WebviewWindow};
 
-// The desktop grid a dropped widget settles onto. Keep in step with host/WidgetForm.cs.
-const MARGIN: f64 = 20.0;
-const STEP: f64 = 24.0;
+// The desktop grid a dropped widget settles onto: the system's own, read off macOS 26. Its widgets sit
+// 16pt in from the desktop's edges and 16pt apart, in 164pt cells, counted from the nearest edge.
+const EDGE: f64 = 16.0;
+const GAP: f64 = 16.0;
+const PITCH: f64 = 164.0 + GAP;
 const GLIDE_MS: f64 = 300.0;
 const MAX: (f64, f64) = (440.0, 600.0);
 // The corner of the system's own widgets, measured beside them on macOS 26.
@@ -138,6 +140,85 @@ fn area_of(window: &WebviewWindow, x: f64, y: f64) -> Rect {
         .unwrap_or(Rect { x: 0.0, y: 0.0, w: 1440.0, h: 900.0 })
 }
 
+// Where the system lays out its widgets on a display: all of it below the menu bar, the Dock's place
+// included, as theirs sit behind it.
+#[cfg(target_os = "macos")]
+fn desktop_of(window: &WebviewWindow, work: Rect) -> Rect {
+    let monitors = window.available_monitors().unwrap_or_default();
+    monitors
+        .iter()
+        .find_map(|m| {
+            let s = m.scale_factor();
+            let a = m.work_area();
+            let area = Rect { x: a.position.x as f64 / s, y: a.position.y as f64 / s, w: a.size.width as f64 / s, h: a.size.height as f64 / s };
+            (area == work).then(|| {
+                let (p, z) = (m.position(), m.size());
+                let full = Rect { x: p.x as f64 / s, y: p.y as f64 / s, w: z.width as f64 / s, h: z.height as f64 / s };
+                Rect { x: full.x, y: work.y, w: full.w, h: full.bottom() - work.y }
+            })
+        })
+        .unwrap_or(work)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn desktop_of(_window: &WebviewWindow, work: Rect) -> Rect {
+    work
+}
+
+/// The cards of the system's desktop widgets. Each sits in a window of its own (Notification Center's,
+/// under the desktop icons) with 8pt to spare on every side.
+#[cfg(target_os = "macos")]
+fn system_widgets() -> Vec<Rect> {
+    use objc2::rc::Retained;
+    use objc2::runtime::AnyObject;
+    use objc2_app_kit::NSRunningApplication;
+    use objc2_foundation::{NSArray, NSDictionary, NSNumber, NSString};
+
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGWindowListCopyWindowInfo(option: u32, relative_to: u32) -> *mut NSArray<NSDictionary<NSString, AnyObject>>;
+    }
+    const ON_SCREEN_ONLY: u32 = 1;
+    const SPARE: f64 = 8.0;
+
+    // SAFETY: a Copy function hands over its own reference to a CFArray of CFDictionaries, toll-free
+    // bridged to their Foundation counterparts. Window bounds need no screen-recording permission.
+    let Some(list) = (unsafe { Retained::from_raw(CGWindowListCopyWindowInfo(ON_SCREEN_ONLY, 0)) }) else { return Vec::new() };
+    let number = |d: &NSDictionary<NSString, AnyObject>, key: &str| {
+        d.objectForKey(&NSString::from_str(key)).and_then(|v| v.downcast::<NSNumber>().ok()).map(|n| n.doubleValue())
+    };
+    let mut owners = std::collections::HashMap::new();
+    let mut found = Vec::new();
+    for info in list.iter() {
+        if number(&info, "kCGWindowLayer").is_none_or(|layer| layer >= 0.0) {
+            continue;
+        }
+        let Some(pid) = number(&info, "kCGWindowOwnerPID").map(|p| p as i32) else { continue };
+        let widgets = *owners.entry(pid).or_insert_with(|| {
+            NSRunningApplication::runningApplicationWithProcessIdentifier(pid)
+                .and_then(|a| a.bundleIdentifier())
+                .is_some_and(|id| id.to_string() == "com.apple.notificationcenterui")
+        });
+        if !widgets {
+            continue;
+        }
+        let Some(bounds) = info.objectForKey(&NSString::from_str("kCGWindowBounds")).and_then(|b| b.downcast::<NSDictionary>().ok()) else { continue };
+        // SAFETY: kCGWindowBounds is a dictionary of numbers keyed by strings.
+        let bounds = unsafe { &*(Retained::as_ptr(&bounds) as *const NSDictionary<NSString, AnyObject>) };
+        if let (Some(x), Some(y), Some(w), Some(h)) = (number(bounds, "X"), number(bounds, "Y"), number(bounds, "Width"), number(bounds, "Height")) {
+            if w > 2.0 * SPARE && h > 2.0 * SPARE {
+                found.push(Rect { x: x + SPARE, y: y + SPARE, w: w - 2.0 * SPARE, h: h - 2.0 * SPARE });
+            }
+        }
+    }
+    found
+}
+
+#[cfg(not(target_os = "macos"))]
+fn system_widgets() -> Vec<Rect> {
+    Vec::new()
+}
+
 fn current(window: &WebviewWindow) -> Option<Rect> {
     let s = window.scale_factor().ok()?;
     let p = window.outer_position().ok()?;
@@ -145,30 +226,36 @@ fn current(window: &WebviewWindow) -> Option<Rect> {
     Some(Rect { x: p.x as f64 / s, y: p.y as f64 / s, w: z.width as f64 / s, h: z.height as f64 / s })
 }
 
-// Grows from the home corner; a size that would cross the grid margin is pushed back inside it.
+// Grows from the home corner; a size that would run past the work area's margin, under the Dock for
+// one, is pushed back inside it.
 fn target(window: &WebviewWindow, home: (f64, f64), (w, h): (f64, f64)) -> Rect {
     let work = area_of(window, home.0, home.1);
-    let x = home.0.min(work.right() - MARGIN - w).max(work.x);
-    let y = home.1.min(work.bottom() - MARGIN - h).max(work.y);
+    let x = home.0.min(work.right() - EDGE - w).max(work.x);
+    let y = home.1.min(work.bottom() - EDGE - h).max(work.y);
     Rect { x, y, w, h }
 }
 
-// Inside a margin of the work area, on fixed steps from it, and flush with the margin when within a
-// step of it.
-fn snap(value: f64, start: f64, end: f64, length: f64) -> f64 {
-    let min = start + MARGIN;
-    let max = end - MARGIN - length;
+// Where a card `length` long settles along one side of the desktop, from `start` to `end`: the closest
+// of the grid's lines, counted in from either edge, and of `lines`, which put it flush with the
+// system's widgets.
+fn snap(value: f64, start: f64, end: f64, length: f64, lines: &[f64]) -> f64 {
+    let min = start + EDGE;
+    let max = end - EDGE - length;
     if max < min {
         return value.min(end - length).max(start);
     }
-    let value = value.clamp(min, max);
-    if value - min <= STEP {
-        return min;
-    }
-    if max - value <= STEP {
-        return max;
-    }
-    (min + ((value - min) / STEP).round() * STEP).min(max)
+    let steps = ((max - min) / PITCH).floor() as i32;
+    (0..=steps)
+        .flat_map(|k| [min + k as f64 * PITCH, max - k as f64 * PITCH])
+        .chain(lines.iter().copied().filter(|line| (min..=max).contains(line)))
+        .min_by(|a, b| (a - value).abs().total_cmp(&(b - value).abs()))
+        .unwrap_or(min)
+}
+
+// Lines along one side that put a card `length` long flush with a system widget there: in line with
+// either of its edges, or a gap past one.
+fn lines(widgets: &[(f64, f64)], length: f64) -> Vec<f64> {
+    widgets.iter().flat_map(|&(start, end)| [start, end - length, end + GAP, start - GAP - length]).collect()
 }
 
 fn put(window: &WebviewWindow, r: Rect) {
@@ -191,8 +278,8 @@ pub fn reveal(app: &AppHandle, window: WebviewWindow, w: f64, h: f64) {
         }
         // First run: the primary display's top-right corner.
         None => match primary_area(&window) {
-            Some(a) => (a.right() - size.0 - MARGIN, a.y + MARGIN),
-            None => (MARGIN, MARGIN),
+            Some(a) => (a.right() - size.0 - EDGE, a.y + EDGE),
+            None => (EDGE, EDGE),
         },
     };
     *home = Some(start);
@@ -286,9 +373,12 @@ pub(crate) fn settle(app: &AppHandle, window: WebviewWindow) {
     let state = widget(app);
     let Some(from) = current(&window) else { return };
     let (w, h) = *state.size.lock().unwrap();
-    let work = area_of(&window, from.x + from.w / 2.0, from.y + from.h / 2.0);
-    let x = snap(from.x, work.x, work.right(), w);
-    let y = snap(from.y, work.y, work.bottom(), h);
+    let desk = desktop_of(&window, area_of(&window, from.x + from.w / 2.0, from.y + from.h / 2.0));
+    let widgets = system_widgets();
+    let across: Vec<_> = widgets.iter().map(|r| (r.x, r.right())).collect();
+    let down: Vec<_> = widgets.iter().map(|r| (r.y, r.bottom())).collect();
+    let x = snap(from.x, desk.x, desk.right(), w, &lines(&across, w));
+    let y = snap(from.y, desk.y, desk.bottom(), h, &lines(&down, h));
     *state.home.lock().unwrap() = Some((x, y));
     state.save();
     animate(app, window, from, Rect { x, y, w, h }, now_ms(), GLIDE_MS);
@@ -453,12 +543,23 @@ mod tests {
 
     #[test]
     fn snaps_to_the_grid() {
-        // A 1000-wide area, a 360-wide widget: the grid runs from 20 to 620.
-        assert_eq!(snap(5.0, 0.0, 1000.0, 360.0), 20.0);
-        assert_eq!(snap(40.0, 0.0, 1000.0, 360.0), 20.0);
-        assert_eq!(snap(100.0, 0.0, 1000.0, 360.0), 92.0);
-        assert_eq!(snap(610.0, 0.0, 1000.0, 360.0), 620.0);
-        assert_eq!(snap(900.0, 0.0, 1000.0, 360.0), 620.0);
+        // The 1680pt-wide desktop the system's widgets were measured on: a 344pt card two cells wide.
+        assert_eq!(snap(5.0, 0.0, 1680.0, 344.0, &[]), 16.0);
+        assert_eq!(snap(150.0, 0.0, 1680.0, 344.0, &[]), 196.0);
+        assert_eq!(snap(1400.0, 0.0, 1680.0, 344.0, &[]), 1320.0);
+        assert_eq!(snap(1150.0, 0.0, 1680.0, 344.0, &[]), 1140.0);
+        // Below a 30pt menu bar, the bottom row counted up from the display's foot.
+        assert_eq!(snap(40.0, 30.0, 1050.0, 320.0, &[]), 46.0);
+        assert_eq!(snap(700.0, 30.0, 1050.0, 320.0, &[]), 714.0);
+    }
+
+    #[test]
+    fn snaps_beside_system_widgets() {
+        // A small widget whose card runs from 500 to 664: a gap past its right edge.
+        let near = lines(&[(500.0, 664.0)], 344.0);
+        assert_eq!(snap(690.0, 0.0, 1680.0, 344.0, &near), 680.0);
+        // In line with its left edge.
+        assert_eq!(snap(505.0, 0.0, 1680.0, 344.0, &near), 500.0);
     }
 
     #[test]
