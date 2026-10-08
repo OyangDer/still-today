@@ -243,7 +243,10 @@ class Store {
     if (liquid) {
       root.dataset.ink = dark ? 'light' : 'dark';
       root.dataset.glass = 'on';
-      root.style.setProperty('--scrim', 'transparent');
+      // Clear glass shows the desktop as it is, light or dark whatever look is chosen: a chosen look
+      // shades it toward itself, so the ink stays readable over any wallpaper.
+      const shade = mode !== 'auto' && this.data.settings.clearGlass;
+      root.style.setProperty('--scrim', shade ? (dark ? 'rgba(20, 20, 24, 0.45)' : 'rgba(250, 250, 252, 0.55)') : 'transparent');
       root.style.setProperty('--sheen', 'none');
     } else if (aura) {
       const look = auraLook(this.aura, dark ? 'light' : 'dark');
