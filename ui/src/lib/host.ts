@@ -34,6 +34,8 @@ export interface BootInfo {
   platform?: string;
   /** Whether this start is the Mac copy that has just moved itself into Applications. */
   installed?: boolean;
+  /** The Mac started with STILL_TODAY_DEMO=1: Canvas and calendar feeds answer with sample data. */
+  demo?: boolean;
   /** Whether the window eases between sizes; only the Tauri host offers the switch. */
   morph?: boolean;
 }
@@ -75,13 +77,18 @@ void tauri?.event.listen('host', (e) => dispatch(e.payload as Parameters<typeof 
 if (tauri) addEventListener('contextmenu', (e) => e.preventDefault());
 
 let mock: ((m: string, p: Record<string, unknown>) => Promise<unknown>) | null = null;
+let demo: ((m: string, p: Record<string, unknown>) => Promise<unknown>) | null = null;
 
 export async function call<T = void>(m: string, p: Record<string, unknown> = {}): Promise<T> {
   if (tauri) {
+    const sample = await demo?.(m, p);
+    if (sample !== undefined) return sample as T;
     // Errors arrive as the bare code string, the same `e` the WebView2 host sends.
-    return tauri.core.invoke('bridge', { m, p }).catch((e: unknown) => {
+    const reply = await tauri.core.invoke('bridge', { m, p }).catch((e: unknown) => {
       throw new Error(String(e));
-    }) as Promise<T>;
+    });
+    if (m === 'boot' && (reply as BootInfo).demo) demo = (await import('./demo')).reply;
+    return reply as T;
   }
   if (!webview) {
     if (!import.meta.env.DEV) throw new Error('Still Today runs inside its host');

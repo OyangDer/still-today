@@ -78,7 +78,14 @@ pub fn emit(app: &AppHandle, ev: &str, d: Value) {
     let _ = app.emit_to("main", "host", json!({ "ev": ev, "d": d }));
 }
 
+// STILL_TODAY_DEMO=1: the page answers Canvas and calendar feeds with its sample data, and saves
+// apart from the real data, so the real widget can be shown off without anyone's courses.
+fn demo() -> bool {
+    std::env::var_os("STILL_TODAY_DEMO").is_some_and(|v| v == "1")
+}
+
 fn boot(app: &AppHandle, host: &Host) -> Result<Value, String> {
+    let canvas_host = if demo() { Some("canvas.example.edu".to_string()) } else { secrets::canvas()?.map(|(host, _)| host) };
     Ok(json!({
         "version": app.package_info().version.to_string(),
         "locale": sys_locale::get_locale().unwrap_or_else(|| "en".into()),
@@ -86,7 +93,7 @@ fn boot(app: &AppHandle, host: &Host) -> Result<Value, String> {
         "backup": read_or_null(&host.backup()),
         "legacy": false,
         "autostart": shell::autostart(app, None),
-        "canvasHost": secrets::canvas()?.map(|(host, _)| host),
+        "canvasHost": canvas_host,
         "canvasAvatar": read_or_null(&host.avatar()),
         "glass": widget::glass(),
         "liquid": glass::available(),
@@ -94,6 +101,7 @@ fn boot(app: &AppHandle, host: &Host) -> Result<Value, String> {
         "morph": host.widget.morph.load(std::sync::atomic::Ordering::Relaxed),
         // Started again from Applications by install::relocate.
         "installed": std::env::args().any(|a| a == "--installed"),
+        "demo": demo(),
     }))
 }
 
@@ -419,7 +427,10 @@ fn main() {
             // A menu bar app: no Dock icon, no app menu.
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
-            let dir = app.path().app_local_data_dir()?;
+            let mut dir = app.path().app_local_data_dir()?;
+            if demo() {
+                dir.push("demo");
+            }
             fs::create_dir_all(&dir)?;
             let widget = widget::Widget::load(&dir);
             app.manage(Host { dir, widget, alarm: Mutex::new(None), saving: Mutex::new(()) });
