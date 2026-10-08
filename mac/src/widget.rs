@@ -374,6 +374,8 @@ pub fn drag(app: &AppHandle, window: WebviewWindow) {
             std::thread::sleep(Duration::from_millis(30));
         }
         widget(&app).dragging.store(false, Ordering::Relaxed);
+        // The move loop kept the release from the page, which may have gone on selecting meanwhile.
+        crate::emit(&app, "moved", Value::Null);
         settle(&app, window);
     });
 }

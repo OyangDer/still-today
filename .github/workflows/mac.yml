@@ -72,25 +72,39 @@ jobs:
           # "Still Today Developer", by its SHA-1, which codesign takes whether or not the system trusts it.
           echo "APPLE_SIGNING_IDENTITY=295A3D46D0543329ACDF1B9ACBE00BE31825F3A9" >> "$GITHUB_ENV"
 
-      # On CI Tauri skips the Finder script that lays out the .dmg window (background, icon places);
-      # this runner has a Finder to run it in.
-      - name: Universal app and .dmg
+      - name: Universal app
         working-directory: mac
         timeout-minutes: 20
-        env:
-          TAURI_BUNDLER_DMG_IGNORE_CI: "true"
         run: npx --yes @tauri-apps/cli@2 build --target universal-apple-darwin
 
-      # Tauri signs the .dmg too, and Gatekeeper checks a signed but un-notarized disk image before it
-      # will open it: a second block before the app's own. Unsigned, it opens at once and only the app
-      # inside, which keeps its signature, is checked. codesign can't strip a disk image; a copy made
-      # by hdiutil carries the same contents and window layout without the signature.
-      - name: Unsigned .dmg
-        working-directory: mac/target/universal-apple-darwin/release/bundle/dmg
+      # The .dmg is made here rather than by Tauri, which names the disk after the app (so on the
+      # desktop it passed for the app itself) and signs it (a signed but un-notarized disk image meets
+      # Gatekeeper before the app does). This one is "Still Today Installer", with its own icon, the
+      # window laid out in Finder (dmg/background*.png), and no signature; the app inside keeps its own.
+      - name: Installer .dmg
+        working-directory: mac
+        timeout-minutes: 10
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
         run: |
-          dmg=$(ls *.dmg)
-          hdiutil convert "$dmg" -format UDZO -imagekey zlib-level=9 -o "$RUNNER_TEMP/unsigned.dmg"
-          mv -f "$RUNNER_TEMP/unsigned.dmg" "$dmg"
+          brew list create-dmg > /dev/null 2>&1 || brew install create-dmg
+          bundle=target/universal-apple-darwin/release/bundle
+          app="$bundle/macos/Still Today.app"
+          version=$(plutil -extract CFBundleShortVersionString raw "$app/Contents/Info.plist")
+          tiffutil -cathidpicheck dmg/background.png dmg/background@2x.png -out "$RUNNER_TEMP/background.tiff"
+          iconset="$RUNNER_TEMP/volume.iconset" && mkdir -p "$iconset"
+          for s in 16 32 128 256 512; do
+            sips -z $s $s dmg/volume.png --out "$iconset/icon_${s}x${s}.png" > /dev/null
+            sips -z $((s * 2)) $((s * 2)) dmg/volume.png --out "$iconset/icon_${s}x${s}@2x.png" > /dev/null
+          done
+          iconutil -c icns "$iconset" -o "$RUNNER_TEMP/volume.icns"
+          mkdir -p "$RUNNER_TEMP/disk" "$bundle/dmg"
+          ditto "$app" "$RUNNER_TEMP/disk/Still Today.app"
+          dmg="$bundle/dmg/Still Today_${version}_universal.dmg"
+          create-dmg --volname "Still Today Installer" --volicon "$RUNNER_TEMP/volume.icns" \
+            --background "$RUNNER_TEMP/background.tiff" --window-size 660 400 --icon-size 128 \
+            --icon "Still Today.app" 180 170 --hide-extension "Still Today.app" --app-drop-link 480 170 \
+            "$dmg" "$RUNNER_TEMP/disk"
           codesign -dv "$dmg" 2>&1 | tee /dev/stderr | grep -q "not signed at all"
 
       # The download to offer: unlike the .dmg it meets Gatekeeper once, and the app moves itself
@@ -117,13 +131,16 @@ jobs:
           open -R "mac/target/universal-apple-darwin/release/bundle/macos/Still Today.app"
           sleep 4
           screencapture -x shots/finder.png
-          # The .dmg's window as a tester first sees it.
+          # The .dmg's window as a tester first sees it, and its disk on the desktop.
           osascript -e 'tell application "Finder" to close every window' || true
           hdiutil attach mac/target/universal-apple-darwin/release/bundle/dmg/*.dmg
-          open "/Volumes/Still Today"
+          open "/Volumes/Still Today Installer"
           sleep 4
           screencapture -x shots/dmg.png
-          hdiutil detach "/Volumes/Still Today" || true
+          osascript -e 'tell application "Finder" to close every window' || true
+          sleep 1
+          screencapture -x shots/dmg-desktop.png
+          hdiutil detach "/Volumes/Still Today Installer" || true
           sw_vers > shots/system.txt
           codesign -dv mac/target/universal-apple-darwin/release/bundle/dmg/*.dmg >> shots/system.txt 2>&1 || true
           lipo -archs "mac/target/universal-apple-darwin/release/bundle/macos/Still Today.app/Contents/MacOS/"* >> shots/system.txt

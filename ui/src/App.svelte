@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { app, TABS, WIDE_TABS } from './lib/state.svelte';
-  import { call } from './lib/host';
+  import { call, on } from './lib/host';
   import { easeIn, easePage, follow, isReduced, move, MORPH_MS, type Frame } from './lib/motion';
   import Header from './components/Header.svelte';
   import Nav from './components/Nav.svelte';
@@ -87,18 +87,34 @@
     return !(target.scrollHeight > target.clientHeight && e.offsetX >= target.clientWidth);
   }
   function press(e: PointerEvent) {
-    if (moves(e)) void call('drag');
+    if (!moves(e)) return;
+    document.documentElement.toggleAttribute('data-moving', true);
+    void call('drag');
   }
+  const selectable = (node: Node | null) => {
+    const el = node instanceof Element ? node : node?.parentElement;
+    return !!el && getComputedStyle(el).getPropertyValue('-webkit-user-select') === 'text';
+  };
   // The press that moves the widget mustn't also begin a text selection: a fast drag outruns the
   // window, and WebKit, still holding the button, selects the text the pointer crosses. Holding the
   // press back also keeps focus where it was, so a field being edited is let go here instead.
   function hold(e: MouseEvent) {
-    const target = e.target as HTMLElement;
-    if (!moves(e) || getComputedStyle(target).getPropertyValue('-webkit-user-select') !== 'none') return;
+    if (!moves(e) || selectable(e.target as Node)) return;
     e.preventDefault();
     const field = document.activeElement;
     if (field instanceof HTMLElement && field.matches('input, textarea')) field.blur();
   }
+  // Should WebKit select anyway, nothing shows while the widget moves (data-moving hides the
+  // highlight), and a selection left in fixed text goes when it stops. The host's move loop swallows
+  // the release: the Mac host says when the button is up, and elsewhere the first pointer movement
+  // with no button down tells.
+  function rest() {
+    if (!document.documentElement.hasAttribute('data-moving')) return;
+    document.documentElement.removeAttribute('data-moving');
+    const selection = getSelection();
+    if (selection && !selection.isCollapsed && !selectable(selection.anchorNode)) selection.removeAllRanges();
+  }
+  onMount(() => on('moved', rest));
 
   // The stage's bottom edge rides the nav bar while its content holds still, so nothing slides
   // under the translucent bar mid-morph. A language change rebuilds the card, so the elements are
@@ -111,7 +127,7 @@
   });
 </script>
 
-<svelte:window onpointerdown={press} onmousedown={hold} />
+<svelte:window onpointerdown={press} onmousedown={hold} onpointermove={(e) => e.buttons || rest()} onpointerup={rest} />
 
 {#key app.data.settings.lang}
   <div
@@ -185,6 +201,10 @@
   .card.entering {
     opacity: 0;
     transform: translate3d(0, 8px, 0);
+  }
+
+  :global([data-moving] ::selection) {
+    background: transparent;
   }
 
   .backdrop {
