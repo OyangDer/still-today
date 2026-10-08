@@ -14,12 +14,14 @@ pub fn available() -> bool {
     false
 }
 
-/// Liquid Glass behind the page, clipped to the widget's corner; false where there is none.
+/// Liquid Glass behind the page, clipped to the widget's corner: clear as the system's widgets are, or
+/// frosted. False where there is none.
 #[cfg(target_os = "macos")]
-pub fn apply(window: &WebviewWindow, radius: f64) -> bool {
+pub fn apply(window: &WebviewWindow, radius: f64, clear: bool) -> bool {
     use window_vibrancy::{apply_liquid_glass, clear_liquid_glass, LiquidGlassOptions, NSGlassEffectViewStyle};
     let _ = clear_liquid_glass(window);
-    available() && apply_liquid_glass(window, LiquidGlassOptions::new(NSGlassEffectViewStyle::Regular).radius(radius)).is_ok()
+    let style = if clear { NSGlassEffectViewStyle::Clear } else { NSGlassEffectViewStyle::Regular };
+    available() && apply_liquid_glass(window, LiquidGlassOptions::new(style).radius(radius)).is_ok()
 }
 
 #[cfg(target_os = "macos")]

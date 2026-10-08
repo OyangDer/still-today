@@ -348,10 +348,11 @@ async fn bridge(app: AppHandle, window: WebviewWindow, host: State<'_, Host>, m:
         }
         "material" => {
             let (aura, dark) = (p["aura"].as_bool().unwrap_or(true), p["dark"].as_bool().unwrap_or(false));
+            let clear = p["clear"].as_bool().unwrap_or(true);
             // Auto leaves the window to the system's appearance, which the page then reads.
             let theme = (!p["auto"].as_bool().unwrap_or(false)).then_some(if dark { tauri::Theme::Dark } else { tauri::Theme::Light });
             let target = window.clone();
-            let _ = window.run_on_main_thread(move || widget::material(&target, aura, theme));
+            let _ = window.run_on_main_thread(move || widget::material(&target, aura, clear, theme));
             Ok(Value::Null)
         }
         // The tab bar's selection, in Liquid Glass behind the page: {x, ms, show}.

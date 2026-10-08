@@ -30,6 +30,11 @@
   $effect(() => {
     if (lang !== app.data.settings.lang) app.setLanguage(lang);
   });
+  let glassLook = $state(app.data.settings.clearGlass ? 'clear' : 'frosted');
+  $effect(() => {
+    const clearGlass = glassLook === 'clear';
+    if (clearGlass !== app.data.settings.clearGlass) app.setAppearance({ clearGlass });
+  });
 
   // A course hidden as a whole is shown again from its own row, not item by item here.
   const hidden = $derived(Object.values(app.data.assignments).filter((a) => a.hidden && app.courseShown(a.courseId)));
@@ -178,6 +183,19 @@
           </button>
         {/each}
       </div>
+      {#if app.liquid && app.data.settings.aura}
+        <div class="line">
+          <span>{t('settings.glass')}</span>
+          <Segmented
+            small
+            bind:value={glassLook}
+            options={[
+              { value: 'clear', label: t('glass.clear') },
+              { value: 'frosted', label: t('glass.frosted') },
+            ]}
+          />
+        </div>
+      {/if}
       <div class="line">
         <span>{t('settings.language')}</span>
         <Segmented

@@ -256,10 +256,10 @@ class Store {
       root.style.removeProperty('--sheen');
       delete root.dataset.ink;
     }
-    void call('material', { aura, dark, auto: mode === 'auto' });
+    void call('material', { aura, dark, auto: mode === 'auto', clear: this.data.settings.clearGlass });
   }
 
-  setAppearance(change: Partial<Pick<Settings, 'aura' | 'mode'>>): void {
+  setAppearance(change: Partial<Pick<Settings, 'aura' | 'clearGlass' | 'mode'>>): void {
     Object.assign(this.data.settings, change);
     this.applyTheme();
     this.persist();

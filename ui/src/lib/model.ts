@@ -10,6 +10,8 @@ export type Lang = 'zh' | 'en';
 export interface Settings {
   /** The desktop showing through the widget, in light or dark as `mode` says. */
   aura: boolean;
+  /** Behind Aura on macOS 26: Liquid Glass's clear variant, as the system's widgets use, else its frosted one. */
+  clearGlass: boolean;
   mode: Mode;
   lang: Lang;
   topmost: boolean;
@@ -193,7 +195,7 @@ export interface Data {
 export function emptyData(lang: Lang): Data {
   return {
     v: 1,
-    settings: { aura: true, mode: 'auto', lang, topmost: false, locked: false, focusSeconds: 25 * 60, notifications: true, courseNames: {}, hiddenCourses: [] },
+    settings: { aura: true, clearGlass: true, mode: 'auto', lang, topmost: false, locked: false, focusSeconds: 25 * 60, notifications: true, courseNames: {}, hiddenCourses: [] },
     canvas: { host: null, user: null, tokenExpires: null, tokenExpiresFromCanvas: false, lastSync: null, error: null, colors: {}, courses: {}, announcementsSeen: null, announcementsViewed: null },
     feeds: [],
     assignments: {},
