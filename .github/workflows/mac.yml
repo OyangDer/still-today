@@ -7,6 +7,11 @@ on:
     branches: [mac]
     paths: [mac/**, ui/**, host/Chime.wav, .github/workflows/mac.yml, .github/mac-check/**]
   workflow_dispatch:
+    inputs:
+      probe:
+        description: Also a copy of the app with the test probe, for tuning on a real Mac
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -107,6 +112,20 @@ jobs:
           path: |
             mac/target/universal-apple-darwin/release/bundle/zip/*.zip
             mac/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+      # Asked for by hand only: the same app with the test probe on 127.0.0.1:9334, to tune the look
+      # beside the system's own widgets. Never handed to testers.
+      - name: Probe app
+        if: inputs.probe
+        working-directory: mac
+        run: |
+          npx --yes @tauri-apps/cli@2 build --target universal-apple-darwin --features probe --bundles app
+          cd target/universal-apple-darwin/release/bundle/macos
+          ditto -c -k --keepParent "Still Today.app" "$RUNNER_TEMP/still-today-probe.zip"
+      - uses: actions/upload-artifact@v4
+        if: inputs.probe
+        with:
+          name: still-today-mac-probe
+          path: ${{ runner.temp }}/still-today-probe.zip
       # The same checks the Windows trial build gets over CDP, through a build with the test probe.
       - name: Mac check
         run: |
