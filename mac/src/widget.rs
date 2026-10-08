@@ -15,9 +15,9 @@ const MARGIN: f64 = 20.0;
 const STEP: f64 = 24.0;
 const GLIDE_MS: f64 = 300.0;
 const MAX: (f64, f64) = (440.0, 600.0);
-// The corner the Mac draws on its own widgets' scale, from the mockup.
+// The corner of the system's own widgets, measured beside them on macOS 26.
 #[cfg(target_os = "macos")]
-pub(crate) const RADIUS: f64 = 22.0;
+pub(crate) const RADIUS: f64 = 26.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rect {
@@ -64,7 +64,7 @@ impl Widget {
         Widget {
             path,
             home: Mutex::new(home),
-            size: Mutex::new((360.0, 320.0)),
+            size: Mutex::new((344.0, 320.0)),
             animation: AtomicU64::new(0),
             dragging: AtomicBool::new(false),
             topmost: AtomicBool::new(false),

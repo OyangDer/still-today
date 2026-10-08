@@ -52,7 +52,7 @@ pub fn pill(webview: *mut std::ffi::c_void, request: &Value) -> Value {
     const H: f64 = 38.0;
     // The page's pill sits 8pt above the bottom edge, with the tab bar's concentric corner.
     const LIFT: f64 = 8.0;
-    const RADIUS: f64 = 14.0;
+    const RADIUS: f64 = 18.0;
 
     let Some(mtm) = MainThreadMarker::new() else { return json!({ "error": "thread" }) };
     if objc2::runtime::AnyClass::get(c"NSGlassEffectView").is_none() {

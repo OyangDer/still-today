@@ -19,7 +19,9 @@
   // The WebView is always EXPANDED in size; the native window clips it to the current card. Keep
   // in step with host/WidgetForm.cs.
   const EXPANDED = { w: 440, h: 600 };
-  const COMPACT_W = 360;
+  // On the Mac, as wide as the system's medium and large widgets, so the card
+  // lines up in a column with them.
+  const COMPACT_W = app.mac ? 344 : 360;
   const COMPACT_MIN_H = 320;
   const HEAD = 36;
   const NAV = 53;
@@ -232,6 +234,10 @@
       opacity 105ms var(--ease-in),
       transform 105ms var(--ease-in),
       visibility 0s linear 105ms;
+  }
+
+  :global([data-os='mac']) .view {
+    width: 344px;
   }
 
   .view.wide {

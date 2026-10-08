@@ -119,6 +119,12 @@
     border-radius: 14px;
   }
 
+  /* Concentric with the Mac's wider corner: 8pt in from its 26. */
+  :global([data-os='mac']) .pill,
+  :global([data-os='mac']) button {
+    border-radius: 18px;
+  }
+
   .pill {
     left: 0;
     width: 88px;
