@@ -83,12 +83,15 @@ jobs:
 
       # Tauri signs the .dmg too, and Gatekeeper checks a signed but un-notarized disk image before it
       # will open it: a second block before the app's own. Unsigned, it opens at once and only the app
-      # inside, which keeps its signature, is checked.
+      # inside, which keeps its signature, is checked. codesign can't strip a disk image; a copy made
+      # by hdiutil carries the same contents and window layout without the signature.
       - name: Unsigned .dmg
         working-directory: mac/target/universal-apple-darwin/release/bundle/dmg
         run: |
-          codesign --remove-signature *.dmg
-          codesign -dv *.dmg 2>&1 | grep -q "not signed at all"
+          dmg=$(ls *.dmg)
+          hdiutil convert "$dmg" -format UDZO -imagekey zlib-level=9 -o "$RUNNER_TEMP/unsigned.dmg"
+          mv -f "$RUNNER_TEMP/unsigned.dmg" "$dmg"
+          codesign -dv "$dmg" 2>&1 | tee /dev/stderr | grep -q "not signed at all"
 
       # The download to offer: unlike the .dmg it meets Gatekeeper once, and the app moves itself
       # into Applications (src/install.rs). ditto keeps the bundle's signature intact.
