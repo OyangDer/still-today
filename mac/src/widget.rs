@@ -53,6 +53,8 @@ pub struct Widget {
     // Brought over other windows for a notification click or the menu's Settings; it goes back
     // under them once the user moves on.
     presented: AtomicBool,
+    // Set by the first reveal; a page reload reveals again without coming forward.
+    revealed: AtomicBool,
     /// Whether the window eases between sizes or jumps; a switch for comparing the two in the beta.
     pub morph: AtomicBool,
 }
@@ -71,6 +73,7 @@ impl Widget {
             dragging: AtomicBool::new(false),
             topmost: AtomicBool::new(false),
             presented: AtomicBool::new(false),
+            revealed: AtomicBool::new(false),
             morph: AtomicBool::new(saved["morph"].as_bool().unwrap_or(true)),
         }
     }
@@ -285,10 +288,16 @@ pub fn reveal(app: &AppHandle, window: WebviewWindow, w: f64, h: f64) {
     *home = Some(start);
     let rect = target(&window, start, size);
     drop(home);
+    // Opened by hand, the widget comes forward, or it would start under whatever is open; at login
+    // it goes straight onto the desktop.
+    let forward = !state.revealed.swap(true, Ordering::Relaxed) && !std::env::args().any(|a| a == "--autostart");
     let app = app.clone();
     let _ = window.clone().run_on_main_thread(move || {
         put(&window, rect);
         show(&app, &window);
+        if forward {
+            present(&app, &window);
+        }
     });
 }
 
