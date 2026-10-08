@@ -159,7 +159,12 @@ note("system", f"scale {state['scale']}, work area {work}, glass {boot.get('glas
 check(near(state["x"] + state["w"], work["x"] + work["w"] - MARGIN) and near(state["y"], work["y"] + MARGIN),
       "first run sits in the top-right corner", f"{state['x']:.0f},{state['y']:.0f} {state['w']:.0f}x{state['h']:.0f}")
 if MAC:
-    check(state["level"] == BELOW, "sits below other windows", f"level {state['level']}")
+    # Opened by hand it comes forward, and goes under other windows once another app is in front.
+    subprocess.run(["osascript", "-e", 'tell application "Finder" to activate'], check=False)
+    time.sleep(1)
+    under = probe.native("state")["level"]
+    check(state["level"] == NORMAL and under == BELOW, "comes forward, then sits below other windows",
+          f"levels {state['level']} → {under}")
     check(state["behavior"] & CAN_JOIN_ALL_SPACES != 0, "on every Space", f"behavior {state['behavior']}")
 check(boot.get("platform") == ("macos" if MAC else "windows") and boot.get("morph") is True, "boot reports the platform and the morph switch")
 
