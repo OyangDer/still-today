@@ -318,7 +318,23 @@ fn stack(window: &WebviewWindow, topmost: bool) {
         let _ = window.set_always_on_bottom(true);
     }
     let _ = window.set_visible_on_all_workspaces(true);
+    stationary(window);
 }
+
+// Show Desktop and Mission Control sweep ordinary windows to the screen's edges; the widget stays
+// where it is, as the desktop and the system's widgets do. Set after the Space setting, which
+// rewrites the window's collection behaviour.
+#[cfg(target_os = "macos")]
+fn stationary(window: &WebviewWindow) {
+    use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
+    let Ok(ns) = window.ns_window() else { return };
+    // SAFETY: as in dress; stack runs on the main thread.
+    let ns = unsafe { &*(ns as *const NSWindow) };
+    ns.setCollectionBehavior(ns.collectionBehavior() | NSWindowCollectionBehavior::Stationary);
+}
+
+#[cfg(not(target_os = "macos"))]
+fn stationary(_window: &WebviewWindow) {}
 
 pub fn set_topmost(app: &AppHandle, window: WebviewWindow, on: bool) {
     widget(app).topmost.store(on, Ordering::Relaxed);

@@ -20,6 +20,7 @@ STORE = os.path.expanduser("~/Library/Application Support/app.stilltoday.widget"
 # status level, not floating's 3; anything above 0 keeps it over other windows).
 BELOW, NORMAL = -1, 0
 CAN_JOIN_ALL_SPACES = 1
+STATIONARY = 1 << 4
 # The grid a dropped widget settles on: on the Mac the system's own widget grid, 16pt in from the
 # desktop's edges in 180pt steps counted from the nearer edge; on Windows 20pt in, in 24pt steps.
 MARGIN, STEP = (16, 180) if MAC else (20, 24)
@@ -166,6 +167,9 @@ if MAC:
     check(state["level"] == NORMAL and under == BELOW, "comes forward, then sits below other windows",
           f"levels {state['level']} → {under}")
     check(state["behavior"] & CAN_JOIN_ALL_SPACES != 0, "on every Space", f"behavior {state['behavior']}")
+    behind = probe.native("state")["behavior"]
+    check(state["behavior"] & STATIONARY != 0 and behind & STATIONARY != 0, "stays put through Show Desktop and Mission Control",
+          f"behavior {state['behavior']} → {behind}")
 check(boot.get("platform") == ("macos" if MAC else "windows") and boot.get("morph") is True, "boot reports the platform and the morph switch")
 
 # Morph: Calendar is wide; the viewport, which is the window, passes through sizes on the way. With
