@@ -20,7 +20,7 @@ STORE = os.path.expanduser("~/Library/Application Support/app.stilltoday.widget"
 # status level, not floating's 3; anything above 0 keeps it over other windows).
 BELOW, NORMAL = -1, 0
 CAN_JOIN_ALL_SPACES = 1
-STATIONARY = 1 << 4
+TRANSIENT, STATIONARY = 1 << 3, 1 << 4
 # The grid a dropped widget settles on: on the Mac the system's own widget grid, 16pt in from the
 # desktop's edges in 180pt steps counted from the nearer edge; on Windows 20pt in, in 24pt steps.
 MARGIN, STEP = (16, 180) if MAC else (20, 24)
@@ -168,8 +168,23 @@ if MAC:
           f"levels {state['level']} → {under}")
     check(state["behavior"] & CAN_JOIN_ALL_SPACES != 0, "on every Space", f"behavior {state['behavior']}")
     behind = probe.native("state")["behavior"]
-    check(state["behavior"] & STATIONARY != 0 and behind & STATIONARY != 0, "stays put through Show Desktop and Mission Control",
+    check(all(b & TRANSIENT and not b & STATIONARY for b in (state["behavior"], behind)), "hidden by Mission Control, like the system's widgets",
           f"behavior {state['behavior']} → {behind}")
+    # What Mission Control and Show Desktop do to it, recorded: the window as the Window Server
+    # lists it, and the screen. Not checks; the runner's Dock may not run them as a Mac at a desk does.
+    MC = "/System/Applications/Mission Control.app/Contents/MacOS/Mission Control"
+    ONSCREEN = """ObjC.import('CoreGraphics');
+JSON.stringify(ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionOnScreenOnly, 0)))
+  .filter(w => /still-today|Still Today/.test(w.kCGWindowOwnerName)).map(w => [w.kCGWindowLayer, w.kCGWindowAlpha, w.kCGWindowBounds]))"""
+    for name, args in (("mission-control", []), ("show-desktop", ["1"])):
+        subprocess.run([MC, *args], check=False)
+        time.sleep(2)
+        listed = subprocess.run(["osascript", "-l", "JavaScript", "-e", ONSCREEN], capture_output=True, text=True).stdout.strip()
+        subprocess.run(["screencapture", "-x", os.path.join(SHOTS, f"{name}.png")], check=False)
+        s = probe.native("state")
+        note(name, f"listed {listed}; at {s['x']:.0f},{s['y']:.0f}")
+        subprocess.run([MC, *args], check=False)
+        time.sleep(2)
 check(boot.get("platform") == ("macos" if MAC else "windows") and boot.get("morph") is True, "boot reports the platform and the morph switch")
 
 # Morph: Calendar is wide; the viewport, which is the window, passes through sizes on the way. With
