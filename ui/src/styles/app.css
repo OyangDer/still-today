@@ -1,8 +1,10 @@
 /* ---- tokens ------------------------------------------------------------------------------ */
 
 :root {
-  --font: 'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', system-ui, sans-serif;
-  --font-display: 'Segoe UI Variable Display', 'Segoe UI', 'Microsoft YaHei UI', system-ui, sans-serif;
+  /* Latin and figures in Inter, the nearest open face to the Mac's SF, bundled since Windows has no
+     such face; the Mac keeps its own. Chinese falls through to the system's. */
+  --font: -apple-system, BlinkMacSystemFont, 'Inter Variable', 'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', system-ui, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, 'Inter Variable', 'Segoe UI Variable Display', 'Segoe UI', 'Microsoft YaHei UI', system-ui, sans-serif;
 
   /* The WPF release's motion, kept because it felt right. --ease-morph matches host/Motion.cs. */
   --ease-morph: cubic-bezier(0.22, 0.8, 0.22, 1);

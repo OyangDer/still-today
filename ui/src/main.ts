@@ -1,4 +1,5 @@
 import { mount } from 'svelte';
+import '@fontsource-variable/inter/opsz.css';
 import './styles/app.css';
 import App from './App.svelte';
 import { app } from './lib/state.svelte';
