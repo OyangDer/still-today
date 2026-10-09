@@ -403,17 +403,30 @@ fn on_screen(number: isize) -> bool {
         .is_some_and(|on| on.boolValue())
 }
 
-// Hidden, the widget is clear and lets clicks through, and keeps its place and level.
+// Hidden, the widget is clear and lets clicks through, and keeps its place and level. Mission Control
+// is only seen once its zoom has begun (the window list says so no sooner than the notification), so
+// the widget fades out with the zoom rather than vanishing a beat behind it, and fades back with it.
 #[cfg(target_os = "macos")]
 fn conceal(window: &WebviewWindow, hidden: bool) {
-    use objc2_app_kit::NSWindow;
+    use block2::RcBlock;
+    use objc2::Message;
+    use objc2_app_kit::{NSAnimatablePropertyContainer, NSAnimationContext, NSWindow};
+    use objc2_quartz_core::CAMediaTimingFunction;
     let Ok(ns) = window.ns_window() else { return };
     // SAFETY: as in dress; on the main thread.
     let ns = unsafe { &*(ns as *const NSWindow) };
-    if ns.ignoresMouseEvents() != hidden {
-        ns.setAlphaValue(if hidden { 0.0 } else { 1.0 });
-        ns.setIgnoresMouseEvents(hidden);
+    if ns.ignoresMouseEvents() == hidden {
+        return;
     }
+    ns.setIgnoresMouseEvents(hidden);
+    let target = ns.retain();
+    let changes = RcBlock::new(move |context: std::ptr::NonNull<NSAnimationContext>| {
+        let context = unsafe { context.as_ref() };
+        context.setDuration(if hidden { 0.15 } else { 0.25 });
+        context.setTimingFunction(Some(&CAMediaTimingFunction::functionWithControlPoints(0.0, 0.0, 0.2, 1.0)));
+        target.animator().setAlphaValue(if hidden { 0.0 } else { 1.0 });
+    });
+    NSAnimationContext::runAnimationGroup(&changes);
 }
 
 // Clearing either level drops the window to the normal one, so the level it keeps is set last.
