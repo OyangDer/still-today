@@ -313,22 +313,107 @@ fn stack(window: &WebviewWindow, topmost: bool) {
     level(window, topmost);
 }
 
-// Mission Control hides the system's widgets along with the desktop, and Show Desktop leaves them
-// where they are, so the widget sits with the desktop's icons and is hidden from Mission Control.
-// Among other windows below the normal level, Show Desktop sweeps it off to the screen's edge. The
-// level is set here rather than through tao, whose setters land later, from the main queue. Set
-// after the Space setting, which rewrites the window's collection behaviour.
+// Show Desktop leaves the system's widgets where they are and they still take clicks there, so the
+// widget sits just under other windows and is stationary: lower, with the desktop's icons, a click
+// in Show Desktop goes to Finder and ends it; not stationary, Show Desktop sweeps it off to the
+// screen's edge. Mission Control hides the system's widgets, which a stationary window can't ask
+// for, so `watch_mission_control` hides it there. The level is set here rather than through tao,
+// whose setters land later, from the main queue. Set after the Space setting, which rewrites the
+// window's collection behaviour.
 #[cfg(target_os = "macos")]
 fn level(window: &WebviewWindow, topmost: bool) {
     use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
-    // kCGDesktopIconWindowLevel, and the level tao gives an always-on-top window.
-    const DESKTOP_ICONS: isize = i32::MIN as isize + 40;
+    // Just under the normal level, and the level tao gives an always-on-top window.
+    const UNDER: isize = -1;
     const ON_TOP: isize = 5;
     let Ok(ns) = window.ns_window() else { return };
     // SAFETY: as in dress; stack runs on the main thread.
     let ns = unsafe { &*(ns as *const NSWindow) };
-    ns.setCollectionBehavior(ns.collectionBehavior() | NSWindowCollectionBehavior::Transient);
-    ns.setLevel(if topmost { ON_TOP } else { DESKTOP_ICONS });
+    let behavior = (ns.collectionBehavior() - NSWindowCollectionBehavior::Transient) | NSWindowCollectionBehavior::Stationary;
+    ns.setCollectionBehavior(behavior);
+    ns.setLevel(if topmost { ON_TOP } else { UNDER });
+}
+
+/// Hides the widget while Mission Control is open, as the system's widgets are. Mission Control
+/// tells no one it is open, but it hides transient windows, so a 1pt transparent one watches for it:
+/// it drops off screen then and only then (Show Desktop and other windows covering it leave it on
+/// screen), and its occlusion changes as it does. A slow check backs the notification up, so the
+/// widget can't stay hidden on a missed one.
+#[cfg(target_os = "macos")]
+pub fn watch_mission_control(window: &WebviewWindow) {
+    use block2::RcBlock;
+    use objc2::runtime::AnyObject;
+    use objc2::{MainThreadMarker, MainThreadOnly};
+    use objc2_app_kit::{NSBackingStoreType, NSColor, NSWindow, NSWindowCollectionBehavior, NSWindowDidChangeOcclusionStateNotification, NSWindowStyleMask};
+    use objc2_foundation::{NSNotificationCenter, NSPoint, NSRect, NSSize};
+
+    let Some(mtm) = MainThreadMarker::new() else { return };
+    let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(1.0, 1.0));
+    // SAFETY: a plain borderless window, made on the main thread and kept for the app's life.
+    let sentinel = unsafe { NSWindow::initWithContentRect_styleMask_backing_defer(NSWindow::alloc(mtm), frame, NSWindowStyleMask::Borderless, NSBackingStoreType::Buffered, false) };
+    unsafe { sentinel.setReleasedWhenClosed(false) };
+    sentinel.setOpaque(false);
+    sentinel.setBackgroundColor(Some(&NSColor::clearColor()));
+    sentinel.setHasShadow(false);
+    sentinel.setIgnoresMouseEvents(true);
+    sentinel.setLevel(-1);
+    sentinel.setCollectionBehavior(NSWindowCollectionBehavior::CanJoinAllSpaces | NSWindowCollectionBehavior::Transient);
+    sentinel.orderFrontRegardless();
+    let number = sentinel.windowNumber();
+
+    let watched = window.clone();
+    let changed = RcBlock::new(move |_: std::ptr::NonNull<objc2_foundation::NSNotification>| conceal(&watched, !on_screen(number)));
+    let object: &AnyObject = &sentinel;
+    // SAFETY: the block only touches the main thread's windows, and the notification comes on the
+    // posting thread, AppKit's main one. The observer and the window stay for the app's life.
+    let observer = unsafe {
+        NSNotificationCenter::defaultCenter().addObserverForName_object_queue_usingBlock(Some(NSWindowDidChangeOcclusionStateNotification), Some(object), None, &changed)
+    };
+    std::mem::forget(observer);
+    std::mem::forget(sentinel);
+
+    let window = window.clone();
+    std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_secs(2));
+        let target = window.clone();
+        let _ = window.run_on_main_thread(move || conceal(&target, !on_screen(number)));
+    });
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn watch_mission_control(_window: &WebviewWindow) {}
+
+// Whether the Window Server has a window of ours on screen.
+#[cfg(target_os = "macos")]
+fn on_screen(number: isize) -> bool {
+    use objc2::rc::Retained;
+    use objc2::runtime::AnyObject;
+    use objc2_foundation::{NSArray, NSDictionary, NSNumber, NSString};
+
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGWindowListCopyWindowInfo(option: u32, relative_to: u32) -> *mut NSArray<NSDictionary<NSString, AnyObject>>;
+    }
+    const INCLUDING_WINDOW: u32 = 1 << 3;
+    // SAFETY: as in system_widgets.
+    let Some(list) = (unsafe { Retained::from_raw(CGWindowListCopyWindowInfo(INCLUDING_WINDOW, number as u32)) }) else { return true };
+    let Some(info) = list.firstObject() else { return true };
+    info.objectForKey(&NSString::from_str("kCGWindowIsOnscreen"))
+        .and_then(|v| v.downcast::<NSNumber>().ok())
+        .is_some_and(|on| on.boolValue())
+}
+
+// Hidden, the widget is clear and lets clicks through, and keeps its place and level.
+#[cfg(target_os = "macos")]
+fn conceal(window: &WebviewWindow, hidden: bool) {
+    use objc2_app_kit::NSWindow;
+    let Ok(ns) = window.ns_window() else { return };
+    // SAFETY: as in dress; on the main thread.
+    let ns = unsafe { &*(ns as *const NSWindow) };
+    if ns.ignoresMouseEvents() != hidden {
+        ns.setAlphaValue(if hidden { 0.0 } else { 1.0 });
+        ns.setIgnoresMouseEvents(hidden);
+    }
 }
 
 // Clearing either level drops the window to the normal one, so the level it keeps is set last.

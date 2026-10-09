@@ -16,9 +16,9 @@ import time
 MAC = sys.platform == "darwin"
 SHOTS = sys.argv[1] if len(sys.argv) > 1 else "check-shots"
 STORE = os.path.expanduser("~/Library/Application Support/app.stilltoday.widget") if MAC else os.environ.get("STORE", "")
-# NSWindowLevel: with the desktop's icons for a desktop widget, above normal when kept on top (tao
+# NSWindowLevel: just under other windows for a desktop widget, above normal when kept on top (tao
 # sets 5, the status level, not floating's 3; anything above 0 keeps it over other windows).
-BELOW, NORMAL = -2147483648 + 40, 0
+BELOW, NORMAL = -1, 0
 CAN_JOIN_ALL_SPACES = 1
 TRANSIENT, STATIONARY = 1 << 3, 1 << 4
 # The grid a dropped widget settles on: on the Mac the system's own widget grid, 16pt in from the
@@ -168,68 +168,27 @@ if MAC:
           f"levels {state['level']} → {under}")
     check(state["behavior"] & CAN_JOIN_ALL_SPACES != 0, "on every Space", f"behavior {state['behavior']}")
     behind = probe.native("state")["behavior"]
-    check(all(b & TRANSIENT and not b & STATIONARY for b in (state["behavior"], behind)), "hidden by Mission Control, like the system's widgets",
+    check(all(b & STATIONARY and not b & TRANSIENT for b in (state["behavior"], behind)), "stays put through Show Desktop, like the system's widgets",
           f"behavior {state['behavior']} → {behind}")
-    # What Mission Control and Show Desktop do to it, as the Window Server lists it: Mission Control
-    # hides it (no bounds), Show Desktop leaves it where it is.
+    # What Mission Control and Show Desktop do to it: Mission Control hides it (the widget clears
+    # itself), Show Desktop leaves it where it is, as the Window Server lists it, and it is back after.
     MC = "/System/Applications/Mission Control.app/Contents/MacOS/Mission Control"
     ONSCREEN = """ObjC.import('CoreGraphics');
 JSON.stringify(ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionOnScreenOnly, 0)))
   .filter(w => /still-today|Still Today/.test(w.kCGWindowOwnerName)).map(w => w.kCGWindowBounds))"""
-    seen = {}
+    seen, alpha = {}, {}
     for name, args in (("mission-control", []), ("show-desktop", ["1"])):
         subprocess.run([MC, *args], check=False)
         time.sleep(2)
         seen[name] = json.loads(subprocess.run(["osascript", "-l", "JavaScript", "-e", ONSCREEN], capture_output=True, text=True).stdout or "[]")
+        alpha[name] = probe.native("state")["alpha"]
         subprocess.run(["screencapture", "-x", os.path.join(SHOTS, f"{name}.png")], check=False)
         subprocess.run([MC, *args], check=False)
         time.sleep(2)
-    gone = [b for b in seen["mission-control"] if b["Width"]]
+        alpha[name + " after"] = probe.native("state")["alpha"]
     kept = [b for b in seen["show-desktop"] if near(b["X"], state["x"]) and near(b["Y"], state["y"])]
-    check(not gone and kept, "Mission Control hides it, Show Desktop leaves it in place", json.dumps(seen))
-if MAC:
-    # Which levels take a real click on the desktop and in Show Desktop, and what Mission Control and
-    # Show Desktop do with each. Recorded, not checked; the menu's Show puts the widget's own back.
-    CLICK = """ObjC.import('CoreGraphics');
-function run(argv) { const p = { x: +argv[0], y: +argv[1] };
-  for (const t of [1, 2]) { $.CGEventPost(0, $.CGEventCreateMouseEvent(null, t, p, 0)); delay(0.08); } }"""
-    def click(x, y):
-        r = subprocess.run(["osascript", "-l", "JavaScript", "-e", CLICK, str(x), str(y)], check=False, capture_output=True, text=True)
-        if r.returncode:
-            note("click", r.stderr.strip())
-        time.sleep(0.6)
-    # Counted and held back, so the press doesn't start a move.
-    probe.js("window.__hits = 0; for (const t of ['pointerdown', 'mousedown']) addEventListener(t, e => { if (t === 'pointerdown') window.__hits++; e.stopImmediatePropagation(); }, true);")
-    def hits():
-        n = probe.js("const n = window.__hits; window.__hits = 0; return n;")
-        return n
-    for level in (0, -1, BELOW, BELOW + 1, BELOW + 2, BELOW + 3, BELOW + 10, -2147483648 + 20 + 1):
-        probe.native("behave", level=level, behavior=CAN_JOIN_ALL_SPACES | TRANSIENT)
-        time.sleep(0.5)
-        s = probe.native("state")
-        cx, cy = s["x"] + s["w"] / 2, s["y"] + 14
-        hits()
-        click(work["x"] + 200, work["y"] + work["h"] - 200)  # the desktop, so Finder is in front
-        click(cx, cy)
-        on_desk = hits()
-        subprocess.run([MC, "1"], check=False)
-        time.sleep(2)
-        listed = json.loads(subprocess.run(["osascript", "-l", "JavaScript", "-e", ONSCREEN], capture_output=True, text=True).stdout or "[]")
-        click(cx, cy)
-        in_show = hits()
-        subprocess.run(["screencapture", "-x", os.path.join(SHOTS, f"level{level}-show-desktop.png")], check=False)
-        subprocess.run([MC, "1"], check=False)
-        time.sleep(2)
-        subprocess.run([MC], check=False)
-        time.sleep(3)
-        mc = json.loads(subprocess.run(["osascript", "-l", "JavaScript", "-e", ONSCREEN], capture_output=True, text=True).stdout or "[]")
-        subprocess.run([MC], check=False)
-        time.sleep(2)
-        stayed = any(near(b["X"], s["x"]) and near(b["Y"], s["y"]) for b in listed)
-        hidden = not any(b["Width"] for b in mc)
-        note(f"level {level}", f"click on desktop {on_desk}, in Show Desktop {in_show}; Show Desktop leaves it {stayed}; Mission Control hides it {hidden}")
-    probe.native("show")
-    time.sleep(0.6)
+    check(alpha == {"mission-control": 0, "mission-control after": 1, "show-desktop": 1, "show-desktop after": 1} and kept,
+          "Mission Control hides it, Show Desktop leaves it in place", json.dumps({"alpha": alpha, **seen}))
 check(boot.get("platform") == ("macos" if MAC else "windows") and boot.get("morph") is True, "boot reports the platform and the morph switch")
 
 # Morph: Calendar is wide; the viewport, which is the window, passes through sizes on the way. With

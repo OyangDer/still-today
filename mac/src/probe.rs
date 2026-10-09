@@ -86,16 +86,6 @@ fn handle(app: &AppHandle, request: &Value) -> Value {
             });
             rx.recv_timeout(Duration::from_secs(5)).unwrap_or(json!({ "error": "timeout" }))
         }
-        // {behavior, level}: raw collection behaviour and window level, to see what Mission Control
-        // and Show Desktop do with each; the menu's Show puts the widget's own back.
-        Some("behave") => {
-            let (request, target, (tx, rx)) = (request.clone(), window.clone(), mpsc::channel());
-            let _ = window.run_on_main_thread(move || {
-                behave(&target, &request);
-                let _ = tx.send(Value::Null);
-            });
-            rx.recv_timeout(Duration::from_secs(5)).unwrap_or(json!({ "error": "timeout" }))
-        }
         Some("pill") => {
             let (request, (tx, rx)) = (request.clone(), mpsc::channel());
             let _ = window.with_webview(move |webview| {
@@ -154,43 +144,26 @@ fn state(window: &WebviewWindow) -> Value {
         let (p, z, s) = (m.position(), m.size(), m.scale_factor());
         json!({ "x": p.x as f64 / s, "y": p.y as f64 / s, "w": z.width as f64 / s, "h": z.height as f64 / s })
     });
-    let (level, behavior) = level(window);
+    let (level, behavior, alpha) = level(window);
     json!({
         "x": p.0, "y": p.1, "w": z.0, "h": z.1, "scale": s,
         "visible": window.is_visible().unwrap_or(false),
-        "work": work, "screen": screen, "level": level, "behavior": behavior,
+        "work": work, "screen": screen, "level": level, "behavior": behavior, "alpha": alpha,
     })
 }
 
 #[cfg(target_os = "macos")]
-fn level(window: &WebviewWindow) -> (Value, Value) {
+fn level(window: &WebviewWindow) -> (Value, Value, Value) {
     use objc2_app_kit::NSWindow;
-    let Ok(ns) = window.ns_window() else { return (Value::Null, Value::Null) };
-    // SAFETY: as in widget::dress; reading two properties.
+    let Ok(ns) = window.ns_window() else { return (Value::Null, Value::Null, Value::Null) };
+    // SAFETY: as in widget::dress; reading three properties.
     let ns = unsafe { &*(ns as *const NSWindow) };
-    (json!(ns.level()), json!(ns.collectionBehavior().0))
-}
-
-#[cfg(target_os = "macos")]
-fn behave(window: &WebviewWindow, request: &Value) {
-    use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
-    let Ok(ns) = window.ns_window() else { return };
-    // SAFETY: as in widget::dress; on the main thread.
-    let ns = unsafe { &*(ns as *const NSWindow) };
-    if let Some(level) = request["level"].as_i64() {
-        ns.setLevel(level as isize);
-    }
-    if let Some(behavior) = request["behavior"].as_u64() {
-        ns.setCollectionBehavior(NSWindowCollectionBehavior(behavior as _));
-    }
+    (json!(ns.level()), json!(ns.collectionBehavior().0), json!(ns.alphaValue()))
 }
 
 #[cfg(not(target_os = "macos"))]
-fn behave(_window: &WebviewWindow, _request: &Value) {}
-
-#[cfg(not(target_os = "macos"))]
-fn level(_window: &WebviewWindow) -> (Value, Value) {
-    (Value::Null, Value::Null)
+fn level(_window: &WebviewWindow) -> (Value, Value, Value) {
+    (Value::Null, Value::Null, Value::Null)
 }
 
 // {name, dark?, radius?, tint?: [r, g, b, a]}: the material, the window's appearance, the corner
