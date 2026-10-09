@@ -16,9 +16,9 @@ import time
 MAC = sys.platform == "darwin"
 SHOTS = sys.argv[1] if len(sys.argv) > 1 else "check-shots"
 STORE = os.path.expanduser("~/Library/Application Support/app.stilltoday.widget") if MAC else os.environ.get("STORE", "")
-# NSWindowLevel: below normal for a desktop widget, above normal when kept on top (tao sets 5, the
-# status level, not floating's 3; anything above 0 keeps it over other windows).
-BELOW, NORMAL = -1, 0
+# NSWindowLevel: with the desktop's icons for a desktop widget, above normal when kept on top (tao
+# sets 5, the status level, not floating's 3; anything above 0 keeps it over other windows).
+BELOW, NORMAL = -2147483648 + 40, 0
 CAN_JOIN_ALL_SPACES = 1
 TRANSIENT, STATIONARY = 1 << 3, 1 << 4
 # The grid a dropped widget settles on: on the Mac the system's own widget grid, 16pt in from the
@@ -170,33 +170,23 @@ if MAC:
     behind = probe.native("state")["behavior"]
     check(all(b & TRANSIENT and not b & STATIONARY for b in (state["behavior"], behind)), "hidden by Mission Control, like the system's widgets",
           f"behavior {state['behavior']} → {behind}")
-    # What Mission Control and Show Desktop do to it, recorded: the window as the Window Server
-    # lists it, and the screen. Not checks; the runner's Dock may not run them as a Mac at a desk does.
+    # What Mission Control and Show Desktop do to it, as the Window Server lists it: Mission Control
+    # hides it (no bounds), Show Desktop leaves it where it is.
     MC = "/System/Applications/Mission Control.app/Contents/MacOS/Mission Control"
     ONSCREEN = """ObjC.import('CoreGraphics');
 JSON.stringify(ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionOnScreenOnly, 0)))
-  .filter(w => /still-today|Still Today/.test(w.kCGWindowOwnerName)).map(w => [w.kCGWindowLayer, w.kCGWindowAlpha, w.kCGWindowBounds]))"""
-    def sweep(tag):
-        for name, args in (("mission-control", []), ("show-desktop", ["1"])):
-            subprocess.run([MC, *args], check=False)
-            time.sleep(2)
-            listed = subprocess.run(["osascript", "-l", "JavaScript", "-e", ONSCREEN], capture_output=True, text=True).stdout.strip()
-            subprocess.run(["screencapture", "-x", os.path.join(SHOTS, f"{tag}{name}.png")], check=False)
-            s = probe.native("state")
-            note(f"{tag}{name}", f"level {s['level']} behavior {s['behavior']}; listed {listed}")
-            subprocess.run([MC, *args], check=False)
-            time.sleep(2)
-    sweep("")
-    # Other ways of being hidden by Mission Control while kept through Show Desktop, tried in turn.
-    DESKTOP_ICONS = -2147483648 + 40
-    for tag, behave in (("icons-transient-", {"level": DESKTOP_ICONS, "behavior": CAN_JOIN_ALL_SPACES | TRANSIENT}),
-                        ("icons-stationary-", {"level": DESKTOP_ICONS, "behavior": CAN_JOIN_ALL_SPACES | STATIONARY}),
-                        ("both-", {"level": BELOW, "behavior": CAN_JOIN_ALL_SPACES | TRANSIENT | STATIONARY})):
-        probe.native("behave", **behave)
-        time.sleep(0.5)
-        sweep(tag)
-    probe.native("show")
-    time.sleep(0.6)
+  .filter(w => /still-today|Still Today/.test(w.kCGWindowOwnerName)).map(w => w.kCGWindowBounds))"""
+    seen = {}
+    for name, args in (("mission-control", []), ("show-desktop", ["1"])):
+        subprocess.run([MC, *args], check=False)
+        time.sleep(2)
+        seen[name] = json.loads(subprocess.run(["osascript", "-l", "JavaScript", "-e", ONSCREEN], capture_output=True, text=True).stdout or "[]")
+        subprocess.run(["screencapture", "-x", os.path.join(SHOTS, f"{name}.png")], check=False)
+        subprocess.run([MC, *args], check=False)
+        time.sleep(2)
+    gone = [b for b in seen["mission-control"] if b["Width"]]
+    kept = [b for b in seen["show-desktop"] if near(b["X"], state["x"]) and near(b["Y"], state["y"])]
+    check(not gone and kept, "Mission Control hides it, Show Desktop leaves it in place", json.dumps(seen))
 check(boot.get("platform") == ("macos" if MAC else "windows") and boot.get("morph") is True, "boot reports the platform and the morph switch")
 
 # Morph: Calendar is wide; the viewport, which is the window, passes through sizes on the way. With

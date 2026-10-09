@@ -318,24 +318,30 @@ fn stack(window: &WebviewWindow, topmost: bool) {
         let _ = window.set_always_on_bottom(true);
     }
     let _ = window.set_visible_on_all_workspaces(true);
-    transient(window);
+    desk(window, topmost);
 }
 
-// Mission Control hides the system's widgets along with the desktop; the widget goes with them
-// rather than staying on top of the window thumbnails. Set after the Space setting, which rewrites
-// the window's collection behaviour.
+// Mission Control hides the system's widgets along with the desktop, and Show Desktop leaves them
+// where they are, so the widget sits with the desktop's icons and is hidden from Mission Control.
+// One level above the icons' window, or among other windows below the normal level, Show Desktop
+// sweeps it off to the screen's edge. Set after the Space setting, which rewrites the window's
+// collection behaviour, and the level tao sets for always-on-bottom.
 #[cfg(target_os = "macos")]
-fn transient(window: &WebviewWindow) {
+fn desk(window: &WebviewWindow, topmost: bool) {
     use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
+    // kCGDesktopIconWindowLevel.
+    const DESKTOP_ICONS: isize = i32::MIN as isize + 40;
     let Ok(ns) = window.ns_window() else { return };
     // SAFETY: as in dress; stack runs on the main thread.
     let ns = unsafe { &*(ns as *const NSWindow) };
-    let behavior = ns.collectionBehavior() & !NSWindowCollectionBehavior::Stationary;
-    ns.setCollectionBehavior(behavior | NSWindowCollectionBehavior::Transient);
+    ns.setCollectionBehavior(ns.collectionBehavior() | NSWindowCollectionBehavior::Transient);
+    if !topmost {
+        ns.setLevel(DESKTOP_ICONS);
+    }
 }
 
 #[cfg(not(target_os = "macos"))]
-fn transient(_window: &WebviewWindow) {}
+fn desk(_window: &WebviewWindow, _topmost: bool) {}
 
 pub fn set_topmost(app: &AppHandle, window: WebviewWindow, on: bool) {
     widget(app).topmost.store(on, Ordering::Relaxed);
