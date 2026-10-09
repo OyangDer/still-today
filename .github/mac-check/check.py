@@ -176,15 +176,27 @@ if MAC:
     ONSCREEN = """ObjC.import('CoreGraphics');
 JSON.stringify(ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionOnScreenOnly, 0)))
   .filter(w => /still-today|Still Today/.test(w.kCGWindowOwnerName)).map(w => [w.kCGWindowLayer, w.kCGWindowAlpha, w.kCGWindowBounds]))"""
-    for name, args in (("mission-control", []), ("show-desktop", ["1"])):
-        subprocess.run([MC, *args], check=False)
-        time.sleep(2)
-        listed = subprocess.run(["osascript", "-l", "JavaScript", "-e", ONSCREEN], capture_output=True, text=True).stdout.strip()
-        subprocess.run(["screencapture", "-x", os.path.join(SHOTS, f"{name}.png")], check=False)
-        s = probe.native("state")
-        note(name, f"listed {listed}; at {s['x']:.0f},{s['y']:.0f}")
-        subprocess.run([MC, *args], check=False)
-        time.sleep(2)
+    def sweep(tag):
+        for name, args in (("mission-control", []), ("show-desktop", ["1"])):
+            subprocess.run([MC, *args], check=False)
+            time.sleep(2)
+            listed = subprocess.run(["osascript", "-l", "JavaScript", "-e", ONSCREEN], capture_output=True, text=True).stdout.strip()
+            subprocess.run(["screencapture", "-x", os.path.join(SHOTS, f"{tag}{name}.png")], check=False)
+            s = probe.native("state")
+            note(f"{tag}{name}", f"level {s['level']} behavior {s['behavior']}; listed {listed}")
+            subprocess.run([MC, *args], check=False)
+            time.sleep(2)
+    sweep("")
+    # Other ways of being hidden by Mission Control while kept through Show Desktop, tried in turn.
+    DESKTOP_ICONS = -2147483648 + 40
+    for tag, behave in (("icons-transient-", {"level": DESKTOP_ICONS, "behavior": CAN_JOIN_ALL_SPACES | TRANSIENT}),
+                        ("icons-stationary-", {"level": DESKTOP_ICONS, "behavior": CAN_JOIN_ALL_SPACES | STATIONARY}),
+                        ("both-", {"level": BELOW, "behavior": CAN_JOIN_ALL_SPACES | TRANSIENT | STATIONARY})):
+        probe.native("behave", **behave)
+        time.sleep(0.5)
+        sweep(tag)
+    probe.native("show")
+    time.sleep(0.6)
 check(boot.get("platform") == ("macos" if MAC else "windows") and boot.get("morph") is True, "boot reports the platform and the morph switch")
 
 # Morph: Calendar is wide; the viewport, which is the window, passes through sizes on the way. With
