@@ -187,6 +187,46 @@ JSON.stringify(ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo
     gone = [b for b in seen["mission-control"] if b["Width"]]
     kept = [b for b in seen["show-desktop"] if near(b["X"], state["x"]) and near(b["Y"], state["y"])]
     check(not gone and kept, "Mission Control hides it, Show Desktop leaves it in place", json.dumps(seen))
+if MAC:
+    # Which levels take a real click on the desktop and in Show Desktop, and what Mission Control and
+    # Show Desktop do with each. Recorded, not checked; the menu's Show puts the widget's own back.
+    CLICK = """ObjC.import('CoreGraphics');
+function run(argv) { const p = $.CGPointMake(+argv[0], +argv[1]);
+  for (const t of [$.kCGEventLeftMouseDown, $.kCGEventLeftMouseUp]) { $.CGEventPost($.kCGHIDEventTap, $.CGEventCreateMouseEvent(null, t, p, $.kCGMouseButtonLeft)); delay(0.08); } }"""
+    def click(x, y):
+        subprocess.run(["osascript", "-l", "JavaScript", "-e", CLICK, str(x), str(y)], check=False, capture_output=True)
+        time.sleep(0.6)
+    probe.js("window.__hits = 0; addEventListener('pointerdown', () => window.__hits++, true);")
+    def hits():
+        n = probe.js("const n = window.__hits; window.__hits = 0; return n;")
+        return n
+    for level in (0, BELOW, BELOW + 1, BELOW + 2, BELOW + 20, -2147483648 + 20 + 1, -20, -1):
+        probe.native("behave", level=level, behavior=CAN_JOIN_ALL_SPACES | TRANSIENT)
+        time.sleep(0.5)
+        s = probe.native("state")
+        cx, cy = s["x"] + s["w"] / 2, s["y"] + 14
+        hits()
+        click(work["x"] + 200, work["y"] + work["h"] - 200)  # the desktop, so Finder is in front
+        click(cx, cy)
+        on_desk = hits()
+        subprocess.run([MC, "1"], check=False)
+        time.sleep(2)
+        listed = json.loads(subprocess.run(["osascript", "-l", "JavaScript", "-e", ONSCREEN], capture_output=True, text=True).stdout or "[]")
+        click(cx, cy)
+        in_show = hits()
+        subprocess.run(["screencapture", "-x", os.path.join(SHOTS, f"level{level}-show-desktop.png")], check=False)
+        subprocess.run([MC, "1"], check=False)
+        time.sleep(2)
+        subprocess.run([MC], check=False)
+        time.sleep(2)
+        mc = json.loads(subprocess.run(["osascript", "-l", "JavaScript", "-e", ONSCREEN], capture_output=True, text=True).stdout or "[]")
+        subprocess.run([MC], check=False)
+        time.sleep(2)
+        stayed = any(near(b["X"], s["x"]) and near(b["Y"], s["y"]) for b in listed)
+        hidden = not any(b["Width"] for b in mc)
+        note(f"level {level}", f"click on desktop {on_desk}, in Show Desktop {in_show}; Show Desktop leaves it {stayed}; Mission Control hides it {hidden}")
+    probe.native("show")
+    time.sleep(0.6)
 check(boot.get("platform") == ("macos" if MAC else "windows") and boot.get("morph") is True, "boot reports the platform and the morph switch")
 
 # Morph: Calendar is wide; the viewport, which is the window, passes through sizes on the way. With

@@ -86,6 +86,16 @@ fn handle(app: &AppHandle, request: &Value) -> Value {
             });
             rx.recv_timeout(Duration::from_secs(5)).unwrap_or(json!({ "error": "timeout" }))
         }
+        // {behavior, level}: raw collection behaviour and window level, to see what Mission Control
+        // and Show Desktop do with each; the menu's Show puts the widget's own back.
+        Some("behave") => {
+            let (request, target, (tx, rx)) = (request.clone(), window.clone(), mpsc::channel());
+            let _ = window.run_on_main_thread(move || {
+                behave(&target, &request);
+                let _ = tx.send(Value::Null);
+            });
+            rx.recv_timeout(Duration::from_secs(5)).unwrap_or(json!({ "error": "timeout" }))
+        }
         Some("pill") => {
             let (request, (tx, rx)) = (request.clone(), mpsc::channel());
             let _ = window.with_webview(move |webview| {
@@ -160,6 +170,23 @@ fn level(window: &WebviewWindow) -> (Value, Value) {
     let ns = unsafe { &*(ns as *const NSWindow) };
     (json!(ns.level()), json!(ns.collectionBehavior().0))
 }
+
+#[cfg(target_os = "macos")]
+fn behave(window: &WebviewWindow, request: &Value) {
+    use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
+    let Ok(ns) = window.ns_window() else { return };
+    // SAFETY: as in widget::dress; on the main thread.
+    let ns = unsafe { &*(ns as *const NSWindow) };
+    if let Some(level) = request["level"].as_i64() {
+        ns.setLevel(level as isize);
+    }
+    if let Some(behavior) = request["behavior"].as_u64() {
+        ns.setCollectionBehavior(NSWindowCollectionBehavior(behavior as _));
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn behave(_window: &WebviewWindow, _request: &Value) {}
 
 #[cfg(not(target_os = "macos"))]
 fn level(_window: &WebviewWindow) -> (Value, Value) {
