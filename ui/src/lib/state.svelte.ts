@@ -38,6 +38,8 @@ export type TaskFilter = 'todo' | 'updated' | 'done';
 export interface Toast {
   id: number;
   text: string;
+  /** A second, quieter line under the text. */
+  hint?: string;
   action?: { label: string; run: () => void };
 }
 
@@ -207,10 +209,10 @@ class Store {
     this.push({ kind: 'task', key });
   }
 
-  notify(text: string, action?: Toast['action']): void {
+  notify(text: string, action?: Toast['action'], hint?: string): void {
     clearTimeout(this.toastTimer);
-    this.toast = { id: ++this.toastSeq, text, action };
-    this.toastTimer = window.setTimeout(() => (this.toast = null), action ? 5000 : 3200);
+    this.toast = { id: ++this.toastSeq, text, hint, action };
+    this.toastTimer = window.setTimeout(() => (this.toast = null), hint ? 6000 : action ? 5000 : 3200);
   }
 
   // ---- appearance --------------------------------------------------------------------------
@@ -325,13 +327,17 @@ class Store {
     if (!a) return;
     a.hidden = true;
     this.persist();
-    this.notify(t('detail.hidden', { t: a.title }), {
-      label: t('undo'),
-      run: () => {
-        a.hidden = false;
-        this.persist();
+    this.notify(
+      t('detail.hidden', { t: a.title }),
+      {
+        label: t('undo'),
+        run: () => {
+          a.hidden = false;
+          this.persist();
+        },
       },
-    });
+      t('detail.hiddenHint'),
+    );
   }
 
   saveTask(task: Omit<Task, 'id' | 'created' | 'done' | 'doneAt'> & { id: string | null }): void {
@@ -397,13 +403,17 @@ class Store {
       });
     } else if (key.startsWith('f:') || key.startsWith('c:')) {
       this.data.hiddenEvents.push(key);
-      this.notify(t('cal.hidden'), {
-        label: t('undo'),
-        run: () => {
-          this.data.hiddenEvents = this.data.hiddenEvents.filter((k) => k !== key);
-          this.persist();
+      this.notify(
+        t('cal.hidden'),
+        {
+          label: t('undo'),
+          run: () => {
+            this.data.hiddenEvents = this.data.hiddenEvents.filter((k) => k !== key);
+            this.persist();
+          },
         },
-      });
+        t('cal.hiddenHint'),
+      );
     }
     this.persist();
   }

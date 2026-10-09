@@ -24,6 +24,7 @@
   let feedBusy = $state(false);
   let feedError = $state('');
   let feedGuide = $state(false);
+  let showHidden = $state(false);
   // A new token for the same Canvas keeps everything synced from it; a rejected one opens this.
   let replacing = $state(app.data.canvas.error === 'token');
 
@@ -407,37 +408,44 @@
 
     {#if hidden.length || hiddenEvents.length}
       <section>
-        <h3>{t('settings.hidden')}</h3>
-        {#each hidden as a (a.id)}
-          <div class="feed" out:fade={{ duration: 150 }}>
-            <span class="who">
-              <span class="name ellipsis">{a.title}</span>
-              <span class="sub ellipsis">{a.course}</span>
-            </span>
-            <button
-              class="text-btn"
-              onclick={() => {
-                a.hidden = false;
-                app.persist();
-              }}>{t('settings.restore')}</button
-            >
+        <button class="fold" class:open={showHidden} aria-expanded={showHidden} onclick={() => (showHidden = !showHidden)}>
+          <span>{t('settings.hidden')}<span class="count num">{hidden.length + hiddenEvents.length}</span></span>
+          <Icon name="down" size={13} />
+        </button>
+        {#if showHidden}
+          <div transition:slide={{ duration: isReduced() ? 0 : 260, easing: easeOut }}>
+            {#each hidden as a (a.id)}
+              <div class="feed" out:fade={{ duration: 150 }}>
+                <span class="who">
+                  <span class="name ellipsis">{a.title}</span>
+                  <span class="sub ellipsis">{a.course}</span>
+                </span>
+                <button
+                  class="text-btn"
+                  onclick={() => {
+                    a.hidden = false;
+                    app.persist();
+                  }}>{t('settings.restore')}</button
+                >
+              </div>
+            {/each}
+            {#each hiddenEvents as e (e.key)}
+              <div class="feed" out:fade={{ duration: 150 }}>
+                <span class="who">
+                  <span class="name ellipsis">{e.title}</span>
+                  <span class="sub ellipsis num">{e.sub}</span>
+                </span>
+                <button
+                  class="text-btn"
+                  onclick={() => {
+                    app.data.hiddenEvents = app.data.hiddenEvents.filter((k) => k !== e.key);
+                    app.persist();
+                  }}>{t('settings.restore')}</button
+                >
+              </div>
+            {/each}
           </div>
-        {/each}
-        {#each hiddenEvents as e (e.key)}
-          <div class="feed" out:fade={{ duration: 150 }}>
-            <span class="who">
-              <span class="name ellipsis">{e.title}</span>
-              <span class="sub ellipsis num">{e.sub}</span>
-            </span>
-            <button
-              class="text-btn"
-              onclick={() => {
-                app.data.hiddenEvents = app.data.hiddenEvents.filter((k) => k !== e.key);
-                app.persist();
-              }}>{t('settings.restore')}</button
-            >
-          </div>
-        {/each}
+        {/if}
       </section>
     {/if}
 
@@ -470,6 +478,43 @@
     font-size: 11.5px;
     font-weight: 650;
     color: var(--muted);
+  }
+
+  /* A heading that folds its section away, for lists that only matter now and then. */
+  .fold {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: calc(100% - 4px);
+    margin: 2px 2px 0;
+    padding: 4px 6px;
+    border-radius: 8px;
+    font-size: 11.5px;
+    font-weight: 650;
+    color: var(--muted);
+    transition: background-color var(--t-micro);
+  }
+
+  .fold:hover {
+    background: var(--control);
+  }
+
+  .fold.open {
+    margin-bottom: 6px;
+  }
+
+  .fold .count {
+    margin-left: 6px;
+    font-weight: 500;
+    color: var(--faint);
+  }
+
+  .fold :global(.icon) {
+    transition: transform var(--t-medium) var(--ease-out);
+  }
+
+  .fold.open :global(.icon) {
+    transform: rotate(180deg);
   }
 
   .themes {

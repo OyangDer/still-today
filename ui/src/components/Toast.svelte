@@ -6,7 +6,10 @@
 {#if app.toast}
   {#key app.toast.id}
     <div class="toast" role="status" in:move={{ y: 18, scale: 0.96, duration: 380, easing: easeMorph }} out:move={{ y: 10, duration: 160, easing: easeIn }}>
-      <span class="text ellipsis">{app.toast.text}</span>
+      <span class="lines">
+        <span class="text ellipsis">{app.toast.text}</span>
+        {#if app.toast.hint}<span class="hint ellipsis">{app.toast.hint}</span>{/if}
+      </span>
       {#if app.toast.action}
         {@const action = app.toast.action}
         <button
@@ -40,9 +43,21 @@
     z-index: 30;
   }
 
+  .lines {
+    display: grid;
+    gap: 1px;
+    min-width: 0;
+  }
+
   .text {
     min-width: 0;
     font-size: 12.5px;
+  }
+
+  .hint {
+    min-width: 0;
+    font-size: 11.5px;
+    color: var(--muted);
   }
 
   button {
