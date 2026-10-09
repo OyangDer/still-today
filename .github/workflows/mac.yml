@@ -127,6 +127,7 @@ jobs:
       - name: Screenshots
         if: ${{ !inputs.quick }}
         run: |
+          mkdir -p shots
           open "mac/target/universal-apple-darwin/release/bundle/macos/Still Today.app"
           sleep 10
           screencapture -x shots/light.png
