@@ -36,6 +36,8 @@ internal sealed class WidgetForm : Form
     private bool _placed;
     private int _animation;
     private bool _dragging;
+    // Set while the widget sizes itself; any other resize is put back (see WM_WINDOWPOSCHANGING).
+    private bool _sizing;
     private int _energySaver;
     private int _batterySaver;
 
@@ -85,7 +87,7 @@ internal sealed class WidgetForm : Form
     {
         var dpi = DpiForPoint(_placement.X, _placement.Y);
         var rect = InitialRect(dpi);
-        Native.SetWindowPos(Handle, Native.HWND_BOTTOM, rect.Left, rect.Top, rect.Width, rect.Height, Native.SWP_NOACTIVATE);
+        SizeTo(Native.HWND_BOTTOM, rect.Left, rect.Top, rect.Width, rect.Height, Native.SWP_NOACTIVATE);
         _home = new System.Drawing.Point(rect.Left, rect.Top);
         ApplyFrame();
         // Windows answers each registration with the current value at once.
@@ -130,7 +132,7 @@ internal sealed class WidgetForm : Form
     {
         _size96 = Clamp(width96, height96);
         var target = TargetRect(_size96);
-        Native.SetWindowPos(Handle, IntPtr.Zero, target.Left, target.Top, target.Width, target.Height, Native.SWP_NOZORDER | Native.SWP_NOACTIVATE);
+        SizeTo(IntPtr.Zero, target.Left, target.Top, target.Width, target.Height, Native.SWP_NOZORDER | Native.SWP_NOACTIVATE);
         _ready = true;
         _placed = true;
         ShowWidget();
@@ -195,7 +197,7 @@ internal sealed class WidgetForm : Form
         // can come out a pixel different) only resizes the window where it is.
         if (_dragging)
         {
-            Native.SetWindowPos(Handle, IntPtr.Zero, 0, 0, Scale(_size96.Width, Dpi), Scale(_size96.Height, Dpi),
+            SizeTo(IntPtr.Zero, 0, 0, Scale(_size96.Width, Dpi), Scale(_size96.Height, Dpi),
                 Native.SWP_NOMOVE | Native.SWP_NOZORDER | Native.SWP_NOACTIVATE);
             return;
         }
@@ -256,7 +258,7 @@ internal sealed class WidgetForm : Form
         var generation = Interlocked.Increment(ref _animation);
         if (durationMs <= 0 || !Visible)
         {
-            Native.SetWindowPos(hwnd, IntPtr.Zero, to.Left, to.Top, to.Width, to.Height, Native.SWP_NOZORDER | Native.SWP_NOACTIVATE);
+            SizeTo(IntPtr.Zero, to.Left, to.Top, to.Width, to.Height, Native.SWP_NOZORDER | Native.SWP_NOACTIVATE);
             landed?.Invoke();
             return;
         }
@@ -356,6 +358,20 @@ internal sealed class WidgetForm : Form
         _controller.Bounds = new Rectangle(0, 0, Scale(MaxWidth96, dpi), Scale(MaxHeight96, dpi));
     }
 
+    // The widget's own resizes, which WM_WINDOWPOSCHANGING lets through.
+    private void SizeTo(IntPtr after, int left, int top, int width, int height, uint flags)
+    {
+        _sizing = true;
+        try
+        {
+            Native.SetWindowPos(Handle, after, left, top, width, height, flags);
+        }
+        finally
+        {
+            _sizing = false;
+        }
+    }
+
     private Native.RECT CurrentRect()
     {
         Native.GetWindowRect(Handle, out var rect);
@@ -430,15 +446,26 @@ internal sealed class WidgetForm : Form
                 // Never a resize border; drags start from the page (BeginDrag).
                 m.Result = (IntPtr)Native.HTCLIENT;
                 return;
-            case Native.WM_WINDOWPOSCHANGING when !_topmost && !_presented:
+            case Native.WM_WINDOWPOSCHANGING:
             {
-                // A desktop widget sits under ordinary windows even after it is clicked.
                 var pos = Marshal.PtrToStructure<Native.WINDOWPOS>(m.LParam);
-                if ((pos.flags & Native.SWP_NOZORDER) == 0)
+                var changed = false;
+                // A desktop widget sits under ordinary windows even after it is clicked.
+                if (!_topmost && !_presented && (pos.flags & Native.SWP_NOZORDER) == 0)
                 {
                     pos.hwndInsertAfter = Native.HWND_BOTTOM;
-                    Marshal.StructureToPtr(pos, m.LParam, false);
+                    changed = true;
                 }
+                // Only the widget sizes itself. Windows refitting windows around a display mode change
+                // (a remote desktop going full screen and back) can stretch it past the page it clips,
+                // and past the page is black.
+                if (!_sizing && (pos.flags & Native.SWP_NOSIZE) == 0)
+                {
+                    pos.cx = Scale(_size96.Width, Dpi);
+                    pos.cy = Scale(_size96.Height, Dpi);
+                    changed = true;
+                }
+                if (changed) Marshal.StructureToPtr(pos, m.LParam, false);
                 break;
             }
             case Native.WM_DPICHANGED:
@@ -448,7 +475,7 @@ internal sealed class WidgetForm : Form
                 Interlocked.Increment(ref _animation);
                 var suggested = Marshal.PtrToStructure<Native.RECT>(m.LParam);
                 var dpi = (int)((long)m.WParam & 0xFFFF);
-                Native.SetWindowPos(Handle, IntPtr.Zero, suggested.Left, suggested.Top,
+                SizeTo(IntPtr.Zero, suggested.Left, suggested.Top,
                     Scale(_size96.Width, dpi), Scale(_size96.Height, dpi), Native.SWP_NOZORDER | Native.SWP_NOACTIVATE);
                 UpdateBounds(dpi);
                 // A drag carries on under the cursor; anything else lands on the new monitor's grid.
@@ -462,7 +489,7 @@ internal sealed class WidgetForm : Form
                 _dragging = true;
                 Interlocked.Increment(ref _animation);
                 var rect = CurrentRect();
-                Native.SetWindowPos(Handle, IntPtr.Zero, rect.Left, rect.Top, Scale(_size96.Width, Dpi), Scale(_size96.Height, Dpi),
+                SizeTo(IntPtr.Zero, rect.Left, rect.Top, Scale(_size96.Width, Dpi), Scale(_size96.Height, Dpi),
                     Native.SWP_NOZORDER | Native.SWP_NOACTIVATE);
                 break;
             }
