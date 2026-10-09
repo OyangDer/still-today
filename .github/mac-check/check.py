@@ -191,16 +191,19 @@ if MAC:
     # Which levels take a real click on the desktop and in Show Desktop, and what Mission Control and
     # Show Desktop do with each. Recorded, not checked; the menu's Show puts the widget's own back.
     CLICK = """ObjC.import('CoreGraphics');
-function run(argv) { const p = $.CGPointMake(+argv[0], +argv[1]);
-  for (const t of [$.kCGEventLeftMouseDown, $.kCGEventLeftMouseUp]) { $.CGEventPost($.kCGHIDEventTap, $.CGEventCreateMouseEvent(null, t, p, $.kCGMouseButtonLeft)); delay(0.08); } }"""
+function run(argv) { const p = { x: +argv[0], y: +argv[1] };
+  for (const t of [1, 2]) { $.CGEventPost(0, $.CGEventCreateMouseEvent(null, t, p, 0)); delay(0.08); } }"""
     def click(x, y):
-        subprocess.run(["osascript", "-l", "JavaScript", "-e", CLICK, str(x), str(y)], check=False, capture_output=True)
+        r = subprocess.run(["osascript", "-l", "JavaScript", "-e", CLICK, str(x), str(y)], check=False, capture_output=True, text=True)
+        if r.returncode:
+            note("click", r.stderr.strip())
         time.sleep(0.6)
-    probe.js("window.__hits = 0; addEventListener('pointerdown', () => window.__hits++, true);")
+    # Counted and held back, so the press doesn't start a move.
+    probe.js("window.__hits = 0; for (const t of ['pointerdown', 'mousedown']) addEventListener(t, e => { if (t === 'pointerdown') window.__hits++; e.stopImmediatePropagation(); }, true);")
     def hits():
         n = probe.js("const n = window.__hits; window.__hits = 0; return n;")
         return n
-    for level in (0, BELOW, BELOW + 1, BELOW + 2, BELOW + 20, -2147483648 + 20 + 1, -20, -1):
+    for level in (0, -1, BELOW, BELOW + 1, BELOW + 2, BELOW + 3, BELOW + 10, -2147483648 + 20 + 1):
         probe.native("behave", level=level, behavior=CAN_JOIN_ALL_SPACES | TRANSIENT)
         time.sleep(0.5)
         s = probe.native("state")
@@ -218,7 +221,7 @@ function run(argv) { const p = $.CGPointMake(+argv[0], +argv[1]);
         subprocess.run([MC, "1"], check=False)
         time.sleep(2)
         subprocess.run([MC], check=False)
-        time.sleep(2)
+        time.sleep(3)
         mc = json.loads(subprocess.run(["osascript", "-l", "JavaScript", "-e", ONSCREEN], capture_output=True, text=True).stdout or "[]")
         subprocess.run([MC], check=False)
         time.sleep(2)
