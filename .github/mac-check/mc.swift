@@ -2,7 +2,9 @@ import AppKit
 // Prints what changes when Mission Control opens: Dock-owned windows and distributed notifications.
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
-var last = ""
+var last = "-"
+setvbuf(stdout, nil, _IOLBF, 0)
+print("start")
 Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { _ in
     let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
     let dock = list.filter { ($0[kCGWindowOwnerName as String] as? String) == "Dock" }
