@@ -6,7 +6,12 @@ let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
 let icons = Int(CGWindowLevelForKey(.desktopIconWindow))
 let desk = Int(CGWindowLevelForKey(.desktopWindow))
-let levels: [(String, Int)] = [("icons", icons), ("icons+1", icons + 1), ("icons+2", icons + 2), ("desk+1", desk + 1), ("-1", -1)]
+let transient: NSWindow.CollectionBehavior = [.canJoinAllSpaces, .transient]
+let stationary: NSWindow.CollectionBehavior = [.canJoinAllSpaces, .stationary]
+let levels: [(String, Int, NSWindow.CollectionBehavior)] = [
+    ("icons", icons, transient), ("icons stat", icons, stationary), ("-1 stat", -1, stationary),
+    ("-1 both", -1, transient.union(stationary)), ("0 stat", 0, stationary),
+]
 
 final class Counter: NSObject {
     var n = 0, name = ""
@@ -14,10 +19,10 @@ final class Counter: NSObject {
 }
 
 var keep: [AnyObject] = []
-for (i, (name, level)) in levels.enumerated() {
+for (i, (name, level, behavior)) in levels.enumerated() {
     let w = NSWindow(contentRect: NSRect(x: 60 + i * 260, y: 380, width: 240, height: 110), styleMask: [.borderless], backing: .buffered, defer: false)
     w.level = NSWindow.Level(rawValue: level)
-    w.collectionBehavior = [.canJoinAllSpaces, .transient]
+    w.collectionBehavior = behavior
     w.backgroundColor = .systemOrange
     let counter = Counter()
     counter.name = name
