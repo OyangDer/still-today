@@ -85,7 +85,18 @@ fn demo() -> bool {
 }
 
 fn boot(app: &AppHandle, host: &Host) -> Result<Value, String> {
-    let canvas_host = if demo() { Some("canvas.example.edu".to_string()) } else { secrets::canvas()?.map(|(host, _)| host) };
+    // A Keychain that will not answer (access denied to a rebuilt binary, say) leaves Canvas
+    // disconnected for this run; failing here kept the widget from appearing at all.
+    let canvas_host = if demo() {
+        Some("canvas.example.edu".to_string())
+    } else {
+        secrets::canvas()
+            .unwrap_or_else(|e| {
+                eprintln!("keychain: {e}");
+                None
+            })
+            .map(|(host, _)| host)
+    };
     Ok(json!({
         "version": app.package_info().version.to_string(),
         "locale": sys_locale::get_locale().unwrap_or_else(|| "en".into()),

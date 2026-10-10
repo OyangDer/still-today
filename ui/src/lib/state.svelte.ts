@@ -117,12 +117,23 @@ class Store {
       this.data = saved ?? emptyData(lang);
       this.data.canvas.host = info.canvasHost;
     } else {
-      const fresh = emptyData(lang);
+      let fresh = emptyData(lang);
       fresh.canvas.host = info.canvasHost;
       // The import copies the old token itself, so it may connect Canvas that the boot info did not see.
+      // It is all or nothing: whatever stops it (a row the reader did not expect, say) leaves a plain
+      // first run, where an error here left no first run at all.
       if (info.legacy) {
-        const dump = await call<LegacyDump | null>('legacy');
-        if (dump) importLegacy(fresh, dump);
+        try {
+          const dump = await call<LegacyDump | null>('legacy');
+          if (dump) {
+            const imported = emptyData(lang);
+            imported.canvas.host = info.canvasHost;
+            importLegacy(imported, dump);
+            fresh = imported;
+          }
+        } catch {
+          // The old database stays where it was.
+        }
       }
       this.data = fresh;
       this.persist();
@@ -361,7 +372,9 @@ class Store {
     this.notify(t('detail.hidden', { t: a.title }), {
       label: t('undo'),
       run: () => {
-        a.hidden = false;
+        // Looked up again: a sync meanwhile may have replaced the object this closure holds.
+        const now = this.data.assignments[id];
+        if (now) now.hidden = false;
         this.persist();
       },
     });
@@ -420,6 +433,8 @@ class Store {
     if (key.startsWith('e:')) {
       const id = key.slice(2);
       const event = this.data.events[id];
+      // A row swiped twice before the list caught up would otherwise put back nothing on undo.
+      if (!event) return;
       delete this.data.events[id];
       this.notify(t('cal.deleted'), {
         label: t('undo'),
@@ -562,10 +577,9 @@ class Store {
     ]);
     // The expiry chosen in Canvas when the token was made. Where Canvas will not say, the date the user
     // typed stands, unless Canvas still takes the token after it: then the date was wrong.
-    if (token.status === 200 && token.body) {
-      const { expires_at } = JSON.parse(token.body) as { expires_at: string | null };
-      Object.assign(this.data.canvas, { tokenExpires: expires_at ? dayKey(new Date(expires_at)) : null, tokenExpiresFromCanvas: true });
-    } else if (this.data.canvas.tokenExpires && this.data.canvas.tokenExpires < dayKey(now)) this.data.canvas.tokenExpires = null;
+    const expiry = token.status === 200 && token.body ? tokenExpiry(token.body) : undefined;
+    if (expiry !== undefined) Object.assign(this.data.canvas, { tokenExpires: expiry, tokenExpiresFromCanvas: true });
+    else if (this.data.canvas.tokenExpires && this.data.canvas.tokenExpires < dayKey(now)) this.data.canvas.tokenExpires = null;
     const graded = mergeAssignments(this.data, pass.items, pass.complete, now);
     if (events) this.data.canvasEvents = events;
     let news: Announcement[] = [];
@@ -787,6 +801,24 @@ class Store {
 
 /** Compares instants, not text: Canvas writes "…:00Z" where this app writes "…:00.000Z". */
 const after = (a: string, b: string) => (parseIso(a)?.getTime() ?? 0) > (parseIso(b)?.getTime() ?? 0);
+
+/**
+ * The expiry day in Canvas's answer about the token: null when the token has none, undefined when
+ * the answer is not one (a portal's page in place of JSON, a date that will not parse). The other
+ * requests already came back as JSON, so this one must not fail the whole pass.
+ */
+function tokenExpiry(body: string): string | null | undefined {
+  try {
+    const reply: unknown = JSON.parse(body);
+    if (!reply || typeof reply !== 'object') return undefined;
+    const { expires_at } = reply as { expires_at?: string | null };
+    if (!expires_at) return null;
+    const at = parseIso(expires_at);
+    return at ? dayKey(at) : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /** Accepts "canvas.x.edu", "https://canvas.x.edu/courses/1" and the like. */
 export function normalizeHost(input: string): string | null {

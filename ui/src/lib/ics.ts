@@ -421,8 +421,14 @@ export function isCanvasAssignment(uid: string, url: string): boolean {
   return uid.startsWith('event-assignment-') || /\/courses\/\d+\/assignments\/\d+/.test(url);
 }
 
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/**
+ * What tells one occurrence of a UID from another: the day for all-day events, the instant otherwise.
+ * The day is zero-padded, or 11 January and 1 November would both read "2026111".
+ */
 function occurrenceStamp(t: IcsTime, zones: Map<string, Observance[]>): string {
-  return t.kind === 'date' ? `${t.wall.y}${t.wall.m}${t.wall.d}` : String(instant(t, zones));
+  return t.kind === 'date' ? `${t.wall.y}${pad2(t.wall.m)}${pad2(t.wall.d)}` : String(instant(t, zones));
 }
 
 export function parseFeed(text: string, rangeStart: Date, rangeEnd: Date, skipAssignments: boolean): ParsedFeed {
@@ -436,6 +442,7 @@ export function parseFeed(text: string, rangeStart: Date, rangeEnd: Date, skipAs
   for (const e of events) if (e.recurrenceId) overrides.set(`${e.uid}|${occurrenceStamp(e.recurrenceId, zones)}`, e);
 
   const out: FeedEvent[] = [];
+  const used = new Set<string>();
   let skipped = 0;
   const from = rangeStart.getTime();
   const to = rangeEnd.getTime();
@@ -464,8 +471,13 @@ export function parseFeed(text: string, rangeStart: Date, rangeEnd: Date, skipAs
     }
     const lastMs = endMs ?? startMs + (allDay ? 86400000 : 0);
     if (lastMs < from || startMs > to) return;
+    // Feeds do reuse a UID (exports that number nothing, say); the list keys rows by it, so a repeat
+    // gets a suffix. The next sync hands out the same suffixes as long as the feed keeps its order.
+    let unique = key;
+    for (let n = 2; used.has(unique); n++) unique = `${key}#${n}`;
+    used.add(unique);
     out.push({
-      key,
+      key: unique,
       title: e.summary || '—',
       start: allDay ? dayKey(new Date(startMs)) : new Date(startMs).toISOString(),
       end,

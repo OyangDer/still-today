@@ -220,7 +220,56 @@ export function normalize(raw: Partial<Data>, lang: Lang): Data {
     settings: { ...base.settings, ...appearance(raw.settings) },
     focus: (raw.focus ?? base.focus).filter((s) => s.seconds >= MIN_FOCUS_SECONDS),
     canvas: { ...base.canvas, ...raw.canvas },
+    hiddenEvents: padHiddenKeys(raw.hiddenEvents ?? base.hiddenEvents),
+    feedEvents: padFeedKeys(raw.feedEvents ?? base.feedEvents),
   };
+}
+
+/**
+ * Up to 0.2.3 an all-day occurrence's key ended in its date without zero padding, so 11 January and
+ * 1 November both read "2026111". Keys are padded now; these give an old key its padded readings,
+ * none when it is not an all-day stamp at all (a bare UID, an instant in milliseconds).
+ */
+function paddedKeys(key: string): string[] {
+  const m = /^(f:[^:]+:.+\|)(\d{4})(\d{2,3})$/.exec(key);
+  if (!m) return [];
+  const [, head, year, rest] = m;
+  const readings = rest.length === 2 ? [[rest[0], rest[1]]] : [[rest[0], rest.slice(1)], [rest.slice(0, 2), rest[2]]];
+  return readings
+    .filter(([month, day]) => +month >= 1 && +month <= 12 && +day >= 1 && +day <= 31)
+    .map(([month, day]) => `${head}${year}${month.padStart(2, '0')}${day.padStart(2, '0')}`);
+}
+
+/** Where an old hidden key could be read two ways both stay hidden, as both were before. */
+function padHiddenKeys(keys: unknown): string[] {
+  if (!Array.isArray(keys)) return [];
+  const out = new Set<string>();
+  for (const key of keys) {
+    if (typeof key !== 'string') continue;
+    const padded = paddedKeys(key);
+    if (padded.length) for (const k of padded) out.add(k);
+    else out.add(key);
+  }
+  return [...out];
+}
+
+/** The next sync rewrites the stored feed; until then its keys must match the hidden ones. */
+function padFeedKeys(feeds: unknown): Record<string, FeedEvent[]> {
+  if (!feeds || typeof feeds !== 'object' || Array.isArray(feeds)) return {};
+  const out: Record<string, FeedEvent[]> = {};
+  for (const [id, events] of Object.entries(feeds as Record<string, unknown>)) {
+    if (!Array.isArray(events)) continue;
+    out[id] = (events as FeedEvent[]).map((e) => {
+      if (typeof e?.key !== 'string') return e;
+      const padded = paddedKeys(`f:${id}:${e.key}`);
+      if (!padded.length) return e;
+      // Its own start day says which reading was meant; an occurrence moved elsewhere takes the first.
+      const day = typeof e.start === 'string' ? e.start.slice(0, 10).replace(/-/g, '') : '';
+      const chosen = padded.find((k) => k.endsWith(`|${day}`)) ?? padded[0];
+      return { ...e, key: chosen.slice(`f:${id}:`.length) };
+    });
+  }
+  return out;
 }
 
 /** Aura on its own was the dark or light that suited the wallpaper; light and dark were solid. */

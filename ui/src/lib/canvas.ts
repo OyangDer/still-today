@@ -200,6 +200,8 @@ function chunks<T>(items: T[], size = 10): T[][] {
  */
 export async function fetchEvents(api: CanvasApi, courses: Course[], userId: string, from: Date, to: Date): Promise<CanvasEvent[] | null> {
   const out: CanvasEvent[] = [];
+  // Canvas may list one event under more than one context; the calendar keys rows by id.
+  const seen = new Set<string>();
   const codes = [...courses.map((c) => `course_${c.id}`), `user_${userId}`];
   for (const part of chunks(codes)) {
     const query = part.map((c) => `context_codes[]=${c}`).join('&');
@@ -207,6 +209,8 @@ export async function fetchEvents(api: CanvasApi, courses: Course[], userId: str
     if (typeof list === 'string') return null;
     for (const e of list) {
       if (e.hidden || e.workflow_state === 'deleted' || !e.title?.trim() || !e.start_at) continue;
+      if (e.id === undefined || seen.has(String(e.id))) continue;
+      seen.add(String(e.id));
       const courseId = courseOf(e.context_code);
       const day = e.all_day ? (e.all_day_date ?? null) : null;
       out.push({
