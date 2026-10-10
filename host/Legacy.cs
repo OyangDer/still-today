@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -48,15 +49,15 @@ internal static class Legacy
     {
         foreach (Dictionary<string, object> row in (List<object>)tables["source_connections"])
         {
-            if (row["kind"] as string != "Canvas") continue;
-            var payload = Secrets.Read(row["credential_reference"] as string);
+            if (Field(row, "kind") != "Canvas") continue;
+            var payload = ReadSecret(Field(row, "credential_reference"));
             if (string.IsNullOrEmpty(payload)) continue;
             // The WPF release stored {"Token": "...", "ExpiryDate": "..."}; the expiry arrives separately
             // through its reminder event in local_events.
             if (new JavaScriptSerializer().DeserializeObject(payload) is not Dictionary<string, object> credential
                 || credential.TryGetValue("Token", out var token) is false
                 || token is not string value || value.Length == 0) continue;
-            Secrets.Write(Bridge.CanvasTarget, row["host"] as string, value);
+            Secrets.Write(Bridge.CanvasTarget, Field(row, "host"), value);
             return true;
         }
         return false;
@@ -67,13 +68,35 @@ internal static class Legacy
         var copied = new List<object>();
         foreach (Dictionary<string, object> row in (List<object>)tables["subscriptions"])
         {
-            var url = Secrets.Read(row["credential_reference"] as string);
-            if (string.IsNullOrEmpty(url)) continue;
-            var id = row["id"] as string;
+            var url = ReadSecret(Field(row, "credential_reference"));
+            var id = Field(row, "id");
+            if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(id)) continue;
             Secrets.Write(Bridge.FeedTarget(id), "feed", url);
             copied.Add(id);
         }
         return copied;
+    }
+
+    /// <summary>A text column, or null where the old schema lacks it or left it empty.</summary>
+    private static string Field(Dictionary<string, object> row, string name) =>
+        row.TryGetValue(name, out var value) ? value as string : null;
+
+    /// <summary>
+    /// A reference the old release never filled in, or one Credential Manager will not give up,
+    /// imports as nothing. An exception here failed the whole first run: the page waits on this
+    /// import before it shows anything.
+    /// </summary>
+    private static string ReadSecret(string target)
+    {
+        if (string.IsNullOrEmpty(target)) return null;
+        try
+        {
+            return Secrets.Read(target);
+        }
+        catch (Win32Exception)
+        {
+            return null;
+        }
     }
 
     private static List<object> Query(IntPtr db, string sql)

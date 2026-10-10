@@ -92,12 +92,16 @@
     const startY = e.clientY;
     const startValue = seconds;
     const onMove = (m: PointerEvent) => setSeconds(startValue + Math.trunc((startY - m.clientY) / DRAG_STEP) * unit);
+    // A drag the system takes over (a touch turned scroll, the window losing the pointer) ends in
+    // pointercancel, not pointerup; without this the dial kept following the pointer for good.
     const up = () => {
       el.removeEventListener('pointermove', onMove);
       el.removeEventListener('pointerup', up);
+      el.removeEventListener('pointercancel', up);
     };
     el.addEventListener('pointermove', onMove);
     el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
   }
 
   function key(e: KeyboardEvent, unit: number) {

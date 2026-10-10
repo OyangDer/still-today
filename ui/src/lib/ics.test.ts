@@ -141,4 +141,30 @@ describe('parseFeed', () => {
     );
     expect(feed.events.map((e) => local(e.start))).toEqual(['2026-08-28 16:00:00', '2026-10-30 16:00:00']);
   });
+
+  it('tells 11 January from 1 November in all-day recurrences, and keys every row once', () => {
+    const feed = parseFeed(
+      cal(
+        [
+          'BEGIN:VEVENT\r\nUID:m\r\nDTSTART;VALUE=DATE:20260111\r\nRRULE:FREQ=MONTHLY;BYMONTHDAY=1,11;COUNT=24\r\nEXDATE;VALUE=DATE:20261101\r\nSUMMARY:Stamp\r\nEND:VEVENT',
+          'BEGIN:VEVENT\r\nUID:dup\r\nDTSTART;VALUE=DATE:20260301\r\nSUMMARY:First\r\nEND:VEVENT',
+          'BEGIN:VEVENT\r\nUID:dup\r\nDTSTART;VALUE=DATE:20260302\r\nSUMMARY:Second\r\nEND:VEVENT',
+        ].join('\r\n'),
+      ),
+      new Date(2026, 0, 1),
+      new Date(2026, 11, 31),
+      true,
+    );
+    // Unpadded, the excluded 1 November read as "2026111" and took 11 January with it.
+    const stamps = feed.events.filter((e) => e.title === 'Stamp').map((e) => e.start);
+    expect(stamps).toHaveLength(22);
+    expect(stamps).toContain('2026-01-11');
+    expect(stamps).not.toContain('2026-11-01');
+    expect(feed.events.find((e) => e.start === '2026-02-01')?.key).toBe('m|20260201');
+    expect(feed.events.filter((e) => e.title !== 'Stamp').map((e) => [e.key, e.start])).toEqual([
+      ['dup', '2026-03-01'],
+      ['dup#2', '2026-03-02'],
+    ]);
+    expect(new Set(feed.events.map((e) => e.key)).size).toBe(feed.events.length);
+  });
 });

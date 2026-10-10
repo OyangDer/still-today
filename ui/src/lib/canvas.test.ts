@@ -192,6 +192,18 @@ describe('course calendar, announcements and colours', () => {
     expect(await fetchEvents(canvas({}), courses, '7', from, to)).toBeNull();
   });
 
+  it('lists an event once however many contexts return it', async () => {
+    const api = canvas({
+      [events]: {
+        body: [
+          { id: 3, title: 'Seminar', start_at: '2026-09-29T08:00:00Z', context_code: 'course_1' },
+          { id: 3, title: 'Seminar', start_at: '2026-09-29T08:00:00Z', context_code: 'user_7' },
+        ],
+      },
+    });
+    expect((await fetchEvents(api, courses, '7', from, to))?.map((e) => e.id)).toEqual(['3']);
+  });
+
   it('lists announcements newest first with their read state', async () => {
     const api = canvas({
       '/api/v1/announcements?context_codes[]=course_1&start_date=2026-09-10&per_page=50': {
