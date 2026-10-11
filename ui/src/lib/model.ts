@@ -195,7 +195,7 @@ export interface Data {
 export function emptyData(lang: Lang): Data {
   return {
     v: 1,
-    settings: { aura: true, clearGlass: true, mode: 'auto', lang, topmost: false, locked: false, focusSeconds: 25 * 60, notifications: true, courseNames: {}, hiddenCourses: [] },
+    settings: { aura: true, clearGlass: false, mode: 'auto', lang, topmost: false, locked: false, focusSeconds: 25 * 60, notifications: true, courseNames: {}, hiddenCourses: [] },
     canvas: { host: null, user: null, tokenExpires: null, tokenExpiresFromCanvas: false, lastSync: null, error: null, colors: {}, courses: {}, announcementsSeen: null, announcementsViewed: null },
     feeds: [],
     assignments: {},

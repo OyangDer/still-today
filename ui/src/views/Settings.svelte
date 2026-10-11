@@ -190,11 +190,12 @@
             small
             bind:value={glassLook}
             options={[
-              { value: 'clear', label: t('glass.clear') },
               { value: 'frosted', label: t('glass.frosted') },
+              { value: 'clear', label: t('glass.clear') },
             ]}
           />
         </div>
+        <p class="hint glass-hint">{t('glass.hint')}</p>
       {/if}
       <div class="line">
         <span>{t('settings.language')}</span>
@@ -689,6 +690,10 @@
   .hint {
     margin: 0;
     padding: 0 6px;
+  }
+
+  .glass-hint {
+    margin: -6px 0 4px;
   }
 
   .connect .hint {

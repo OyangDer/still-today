@@ -359,7 +359,7 @@ async fn bridge(app: AppHandle, window: WebviewWindow, host: State<'_, Host>, m:
         }
         "material" => {
             let (aura, dark) = (p["aura"].as_bool().unwrap_or(true), p["dark"].as_bool().unwrap_or(false));
-            let clear = p["clear"].as_bool().unwrap_or(true);
+            let clear = p["clear"].as_bool().unwrap_or(false);
             // Auto leaves the window to the system's appearance, which the page then reads.
             let theme = (!p["auto"].as_bool().unwrap_or(false)).then_some(if dark { tauri::Theme::Dark } else { tauri::Theme::Light });
             let target = window.clone();
