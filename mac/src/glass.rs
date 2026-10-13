@@ -150,7 +150,7 @@ pub fn round_window(window: &WebviewWindow, radius: f64) {
     use objc2::rc::Retained;
     use objc2::runtime::{AnyClass, AnyObject, Bool, Imp, Sel};
     use objc2::{msg_send, sel};
-    use objc2_app_kit::{NSBezierPath, NSColor, NSImage, NSImageResizingMode};
+    use objc2_app_kit::{NSBezierPath, NSColor, NSImage};
     use objc2_foundation::{NSEdgeInsets, NSRect, NSSize};
     use std::panic::AssertUnwindSafe;
     use std::sync::atomic::{AtomicPtr, Ordering};
@@ -173,9 +173,8 @@ pub fn round_window(window: &WebviewWindow, radius: f64) {
             let side = radius * 2.0 + 1.0;
             let image = NSImage::imageWithSize_flipped_drawingHandler(NSSize::new(side, side), false, &draw);
             image.setCapInsets(NSEdgeInsets { top: radius, left: radius, bottom: radius, right: radius });
-            // AppKit insists the mask stretches. A new image tiles, and stretching is the other mode:
-            // objc2-app-kit 0.3.2 has the two swapped on Apple silicon, so its constant would tile.
-            image.setResizingMode(NSImageResizingMode(1 - image.resizingMode().0));
+            // AppKit insists the mask stretches, as a new image already does. Left alone: objc2-app-kit
+            // 0.3.2's Stretch is Tile's value on Apple silicon.
             // Kept for the life of the app: the window asks for it again whenever its shape changes.
             MASK.store(Retained::into_raw(image).cast(), Ordering::Relaxed);
         }
