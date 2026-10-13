@@ -264,8 +264,25 @@ pub fn pill(webview: *mut std::ffi::c_void, request: &Value) -> Value {
     let pill = PILL.with_borrow_mut(|slot| {
         slot.get_or_insert_with(|| {
             let view = NSGlassEffectView::initWithFrame(mtm.alloc(), NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(W, H)));
-            view.setStyle(NSGlassEffectViewStyle::Regular);
+            // Clear glass held to the light look. Left to choose its own look, the glass flips between light
+            // and dark with whatever is behind the card, and flickers as the pill moves; held, it stays a
+            // clear lens with a bright rim, as tried beside the other looks on macOS 26.6.
+            view.setStyle(NSGlassEffectViewStyle::Clear);
             view.setCornerRadius(RADIUS);
+            // SAFETY: a live view on the main thread; the private setter is only sent where AppKit has it.
+            unsafe {
+                use objc2::runtime::{AnyClass, AnyObject, Bool};
+                use objc2::{msg_send, sel};
+                if let Some(appearance) = AnyClass::get(c"NSAppearance") {
+                    let name = objc2_foundation::NSString::from_str("NSAppearanceNameAqua");
+                    let light: *mut AnyObject = msg_send![appearance, appearanceNamed: &*name];
+                    let _: () = msg_send![&*view, setAppearance: light];
+                }
+                let known: Bool = msg_send![&*view, respondsToSelector: sel!(set_adaptiveAppearance:)];
+                if known.as_bool() {
+                    let _: () = msg_send![&*view, set_adaptiveAppearance: 1isize];
+                }
+            }
             view
         })
         .clone()
