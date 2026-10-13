@@ -617,6 +617,7 @@ pub fn dress(window: &WebviewWindow) {
             }
         }
     }
+    crate::glass::round_window(window, RADIUS);
     let _ = window.set_shadow(true);
 }
 

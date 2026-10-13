@@ -21,15 +21,16 @@ pub fn apply(window: &WebviewWindow, radius: f64, airy: bool, dark: bool) -> boo
     use window_vibrancy::{apply_liquid_glass, clear_liquid_glass, LiquidGlassOptions, NSGlassEffectViewStyle};
     let _ = clear_liquid_glass(window);
     let mut options = LiquidGlassOptions::new(NSGlassEffectViewStyle::Regular).radius(radius);
-    // Dark glass alone is a milky grey; the system's widgets are near black with the wallpaper's hue
-    // showing through. Measured beside them on macOS 26.6: airy at 15%; frosted keeps its 49%.
-    if dark {
-        options = options.tint_color((0, 0, 0, if airy { 38 } else { 125 }));
+    // Frosted's dark glass alone is a milky grey; tinted black, it is near black with the wallpaper's
+    // hue showing through.
+    if dark && !airy {
+        options = options.tint_color((0, 0, 0, 125));
     }
     available() && apply_liquid_glass(window, options).is_ok() && {
-        if airy && !dark {
-            widget_variant(window);
+        if airy {
+            widget_glass(window, dark);
         }
+        window_blur(window, if airy { WIDGET_BLUR } else { 0 });
         keep_active(window);
         true
     }
@@ -45,13 +46,33 @@ const GLASS_VIEW_TAG: isize = 96945937;
 #[cfg(target_os = "macos")]
 const WIDGET_VARIANT: isize = 3;
 
-/// The variant alone sits a little lighter than the wallpaper; the system's widgets a little darker,
-/// with the wallpaper's hue kept. A black tint of 22% matched them, in the same spot, on macOS 26.6.
+// Airy glass is matched to the system's widgets by measurement on macOS 26.6: glass and widget side by
+// side, the same size, over wallpapers made for it. Four plain greys and a blue give the colour each
+// maps the wallpaper to; black and white stripes give how far it blurs and how much shows through.
+
+/// Black over the variant, light look: the system's light widgets map every plain wallpaper to the
+/// same colour as this, within 3 of 255.
 #[cfg(target_os = "macos")]
-const WIDGET_DIM: f64 = 0.22;
+const WIDGET_DIM: f64 = 0.18;
+
+/// The dark look: this much black, and the page's grey veil over it (ui/src/lib/state.svelte.ts), let
+/// as much of the wallpaper through as the system's dark widgets and give the same colours.
+#[cfg(target_os = "macos")]
+const WIDGET_DIM_DARK: f64 = 0.60;
+
+/// Without the variant, plain glass tinted this much matches the dark widgets' colours, if not their
+/// clarity.
+#[cfg(target_os = "macos")]
+const PLAIN_DIM_DARK: f64 = 0.15;
+
+/// The system's widgets blur the wallpaper more than the variant does on its own. The window server's
+/// blur behind the window, at this radius in points, makes up the rest: the stripes' edges then
+/// spread as far as under the widgets, in either look.
+#[cfg(target_os = "macos")]
+const WIDGET_BLUR: i32 = 19;
 
 #[cfg(target_os = "macos")]
-fn widget_variant(window: &WebviewWindow) {
+fn widget_glass(window: &WebviewWindow, dark: bool) {
     use objc2::runtime::{AnyObject, Bool};
     use objc2::{msg_send, sel};
     let Ok(ns) = window.ns_window() else { return };
@@ -67,12 +88,100 @@ fn widget_variant(window: &WebviewWindow) {
             return;
         }
         let known: Bool = msg_send![glass, respondsToSelector: sel!(set_variant:)];
-        if known.as_bool() {
+        let dim = if known.as_bool() {
             let _: () = msg_send![glass, set_variant: WIDGET_VARIANT];
-            // Tinted after the variant, as it was matched.
-            let tint = objc2_app_kit::NSColor::colorWithSRGBRed_green_blue_alpha(0.0, 0.0, 0.0, WIDGET_DIM);
-            let _: () = msg_send![glass, setTintColor: &*tint];
+            if dark {
+                WIDGET_DIM_DARK
+            } else {
+                WIDGET_DIM
+            }
+        } else if dark {
+            PLAIN_DIM_DARK
+        } else {
+            return;
+        };
+        // Tinted after the variant, as it was matched.
+        let tint = objc2_app_kit::NSColor::colorWithSRGBRed_green_blue_alpha(0.0, 0.0, 0.0, dim);
+        let _: () = msg_send![glass, setTintColor: &*tint];
+    }
+}
+
+/// The window server's blur behind the whole window, 0 for none. Private, as iTerm2 uses it; a Mac
+/// without it keeps the glass's own blur.
+#[cfg(target_os = "macos")]
+fn window_blur(window: &WebviewWindow, radius: i32) {
+    use objc2::msg_send;
+    use objc2::runtime::AnyObject;
+    use std::ffi::{c_char, c_void};
+    extern "C" {
+        fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
+    }
+    // RTLD_DEFAULT: look in every image already loaded.
+    let everywhere = -2isize as *mut c_void;
+    let Ok(ns) = window.ns_window() else { return };
+    // SAFETY: both symbols are looked up by name and only called when found, with the signatures
+    // SkyLight has kept since 10.x; the window number is the live NSWindow's own.
+    unsafe {
+        let connection = dlsym(everywhere, c"CGSMainConnectionID".as_ptr());
+        let set = dlsym(everywhere, c"CGSSetWindowBackgroundBlurRadius".as_ptr());
+        if connection.is_null() || set.is_null() {
+            return;
         }
+        let connection: unsafe extern "C" fn() -> u32 = std::mem::transmute(connection);
+        let set: unsafe extern "C" fn(u32, u32, i32) -> i32 = std::mem::transmute(set);
+        let number: isize = msg_send![ns as *mut AnyObject, windowNumber];
+        set(connection(), number as u32, radius);
+    }
+}
+
+/// The window server blurs and shadows a borderless window as a rectangle. This mask gives the window
+/// the card's rounded corners there too, so the blur behind the glass ends where the glass does.
+#[cfg(target_os = "macos")]
+pub fn round_window(window: &WebviewWindow, radius: f64) {
+    use block2::RcBlock;
+    use objc2::ffi::{class_getInstanceMethod, class_replaceMethod, method_getTypeEncoding};
+    use objc2::rc::Retained;
+    use objc2::runtime::{AnyClass, AnyObject, Bool, Imp, Sel};
+    use objc2::{msg_send, sel};
+    use objc2_app_kit::{NSBezierPath, NSColor, NSImage, NSImageResizingMode};
+    use objc2_foundation::{NSEdgeInsets, NSRect, NSSize};
+    use std::sync::atomic::{AtomicPtr, Ordering};
+
+    static MASK: AtomicPtr<AnyObject> = AtomicPtr::new(std::ptr::null_mut());
+    extern "C-unwind" fn mask(_: &AnyObject, _: Sel) -> *mut AnyObject {
+        MASK.load(Ordering::Relaxed)
+    }
+    if MASK.load(Ordering::Relaxed).is_null() {
+        let draw = RcBlock::new(move |rect: NSRect| -> Bool {
+            NSColor::blackColor().set();
+            NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(rect, radius, radius).fill();
+            Bool::YES
+        });
+        let side = radius * 2.0 + 1.0;
+        let image = NSImage::imageWithSize_flipped_drawingHandler(NSSize::new(side, side), false, &draw);
+        image.setCapInsets(NSEdgeInsets { top: radius, left: radius, bottom: radius, right: radius });
+        image.setResizingMode(NSImageResizingMode::Stretch);
+        // Kept for the life of the app: the window asks for it again whenever its shape changes.
+        MASK.store(Retained::into_raw(image).cast(), Ordering::Relaxed);
+    }
+    let Ok(ns) = window.ns_window() else { return };
+    // SAFETY: as in keep_active, the override reaches only Tauri's own NSWindow subclass. The mask is
+    // retained above and never released.
+    unsafe {
+        let class = (*(ns as *const AnyObject)).class() as *const AnyClass;
+        let name = sel!(_cornerMask);
+        let method = class_getInstanceMethod(class, name);
+        if method.is_null() {
+            return;
+        }
+        let imp: Imp = std::mem::transmute(mask as extern "C-unwind" fn(&AnyObject, Sel) -> *mut AnyObject);
+        class_replaceMethod(class as *mut AnyClass, name, imp, method_getTypeEncoding(method));
+        let ns = ns as *mut AnyObject;
+        let known: Bool = msg_send![ns, respondsToSelector: sel!(_cornerMaskChanged)];
+        if known.as_bool() {
+            let _: () = msg_send![ns, _cornerMaskChanged];
+        }
+        let _: () = msg_send![ns, invalidateShadow];
     }
 }
 
@@ -105,6 +214,7 @@ fn keep_active(window: &WebviewWindow) {
 #[cfg(target_os = "macos")]
 pub fn clear(window: &WebviewWindow) {
     let _ = window_vibrancy::clear_liquid_glass(window);
+    window_blur(window, 0);
 }
 
 // {x, show?, ms?, style?}: a Liquid Glass pill just behind the page, under the tab labels where the page's

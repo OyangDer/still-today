@@ -253,12 +253,13 @@ class Store {
     root.dataset.liquid = liquid ? 'on' : 'off';
     if (liquid) {
       // The look alone decides how the card looks; the system's only decides which look auto is. Airy
-      // glass is the system widgets' own: white ink in either look, nothing over it (the host dims the
-      // glass itself). Frosted glass is whiter and firmer, with dark ink in the light look.
+      // glass is the system widgets' own: white ink in either look. The host dims the glass itself; in
+      // the dark look a thin grey over it keeps the wallpaper as clear as theirs (mac/src/glass.rs).
+      // Frosted glass is whiter and firmer, with dark ink in the light look.
       const airy = this.data.settings.clearGlass;
       root.dataset.ink = dark || airy ? 'light' : 'dark';
       root.dataset.glass = 'on';
-      const veil = dark || airy ? 'transparent' : 'rgba(250, 250, 252, 0.5)';
+      const veil = airy ? (dark ? 'rgba(73, 73, 73, 0.2)' : 'transparent') : dark ? 'transparent' : 'rgba(250, 250, 252, 0.5)';
       root.style.setProperty('--scrim', veil);
       root.style.setProperty('--sheen', 'none');
       // The glass draws its own rim, as on the system's widgets; frosted keeps the page's as well.
