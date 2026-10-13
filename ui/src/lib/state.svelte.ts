@@ -252,19 +252,18 @@ class Store {
     const liquid = aura && this.liquid;
     root.dataset.liquid = liquid ? 'on' : 'off';
     if (liquid) {
-      // The look alone decides how the card looks; the system's only decides which look auto is.
-      // Clear glass is the system widgets' Clear: white ink over a dimmed desktop in either look, the
-      // dark look dimming it further. Light frosted glass alone is barely whiter than the desktop, so
-      // it takes a white veil to read as frosted.
-      const clear = this.data.settings.clearGlass;
-      root.dataset.ink = dark || clear ? 'light' : 'dark';
+      root.dataset.ink = dark ? 'light' : 'dark';
       root.dataset.glass = 'on';
-      root.dataset.clear = clear ? 'on' : 'off';
-      const veil = clear ? `rgba(0, 0, 0, ${dark ? 0.32 : 0.16})` : dark ? 'transparent' : 'rgba(250, 250, 252, 0.5)';
+      // The look alone decides how the card looks; the system's only decides which look auto is. Clear
+      // glass takes a veil of the look's own colour, so the ink reads the same over any desktop. Light
+      // frosted glass alone is barely whiter than light clear, so it takes a heavier one to tell them apart.
+      const clear = this.data.settings.clearGlass;
+      const veil = dark
+        ? clear ? 'rgba(20, 20, 24, 0.3)' : 'transparent'
+        : `rgba(250, 250, 252, ${clear ? 0.18 : 0.5})`;
       root.style.setProperty('--scrim', veil);
       root.style.setProperty('--sheen', 'none');
     } else if (aura) {
-      delete root.dataset.clear;
       const look = auraLook(this.aura, dark ? 'light' : 'dark');
       root.style.removeProperty('--sheen');
       root.dataset.ink = look.ink;
@@ -274,7 +273,6 @@ class Store {
     } else {
       root.style.removeProperty('--sheen');
       delete root.dataset.ink;
-      delete root.dataset.clear;
     }
     void call('material', { aura, dark, auto: mode === 'auto', clear: this.data.settings.clearGlass });
   }
