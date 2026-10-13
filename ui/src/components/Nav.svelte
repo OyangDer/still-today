@@ -41,9 +41,8 @@
     const [start, ms] = placed === frame ? [Date.now(), PILL_MS] : [frame.start, frame.ms];
     follow(pill!, to, start, ms);
     placed = frame;
-    // The Mac's Liquid Glass pill turned light or dark by what lay behind it, so the page draws its own
-    // on airy glass too; the native one stays put away.
-    if (app.liquid) void call('pill', { x, start, ms, show: false });
+    // On macOS 26 the Mac draws the pill in Liquid Glass, just behind the page, on the same timeline.
+    if (app.liquid) void call('pill', { x, start, ms, show: liquid && !app.tabBarAway });
   });
 
   // Airy glass only: Mist keeps the page's own bar and pill, as on Windows.
@@ -94,15 +93,14 @@
     pointer-events: none;
   }
 
-  /* On airy glass the bar has no ground of its own, and its pill is clear: no fill, only a bright rim. */
+  /* The Mac's Liquid Glass stands in for the bar's ground and its pill. */
   .band.liquid {
     background: transparent;
     border-top-color: transparent;
   }
 
   .band.liquid .pill {
-    background: transparent;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+    visibility: hidden;
   }
 
   .band.away .pill,
