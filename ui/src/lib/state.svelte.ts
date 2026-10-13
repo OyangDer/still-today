@@ -261,10 +261,21 @@ class Store {
       root.style.setProperty('--scrim', dark ? 'rgba(73, 73, 73, 0.2)' : 'transparent');
       root.style.setProperty('--sheen', 'none');
       root.style.setProperty('--edge', 'none');
+      // Its menus are the same glass a shade lighter in the light look, as its tab pill is; the dark look keeps
+      // the smoked one (app.css).
+      if (dark) {
+        root.style.removeProperty('--pop');
+        root.style.removeProperty('--pop-shadow');
+      } else {
+        root.style.setProperty('--pop', 'rgba(255, 255, 255, 0.2)');
+        root.style.setProperty('--pop-shadow', '0 12px 30px -14px rgba(0, 0, 0, 0.28), 0 0 0 0.5px rgba(255, 255, 255, 0.45)');
+      }
     } else if (liquid) {
       // Mist is the Windows widget's Aura over the window server's blur: its scrim, sheen and rim.
       const look = mistLook(dark ? 'light' : 'dark');
       root.style.removeProperty('--sheen');
+      root.style.removeProperty('--pop');
+      root.style.removeProperty('--pop-shadow');
       root.style.removeProperty('--edge');
       root.dataset.ink = look.ink;
       root.dataset.glass = 'on';
@@ -272,6 +283,8 @@ class Store {
     } else if (aura) {
       const look = auraLook(this.aura, dark ? 'light' : 'dark');
       root.style.removeProperty('--sheen');
+      root.style.removeProperty('--pop');
+      root.style.removeProperty('--pop-shadow');
       root.style.removeProperty('--edge');
       root.dataset.ink = look.ink;
       root.dataset.glass = this.glass ? 'on' : 'off';
@@ -279,6 +292,8 @@ class Store {
       root.style.setProperty('--aura-fill', look.fill);
     } else {
       root.style.removeProperty('--sheen');
+      root.style.removeProperty('--pop');
+      root.style.removeProperty('--pop-shadow');
       root.style.removeProperty('--edge');
       delete root.dataset.ink;
     }
