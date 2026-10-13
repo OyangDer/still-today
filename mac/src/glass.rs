@@ -173,7 +173,9 @@ pub fn round_window(window: &WebviewWindow, radius: f64) {
             let side = radius * 2.0 + 1.0;
             let image = NSImage::imageWithSize_flipped_drawingHandler(NSSize::new(side, side), false, &draw);
             image.setCapInsets(NSEdgeInsets { top: radius, left: radius, bottom: radius, right: radius });
-            image.setResizingMode(NSImageResizingMode::Stretch);
+            // AppKit insists the mask stretches. A new image tiles, and stretching is the other mode:
+            // objc2-app-kit 0.3.2 has the two swapped on Apple silicon, so its constant would tile.
+            image.setResizingMode(NSImageResizingMode(1 - image.resizingMode().0));
             // Kept for the life of the app: the window asks for it again whenever its shape changes.
             MASK.store(Retained::into_raw(image).cast(), Ordering::Relaxed);
         }
