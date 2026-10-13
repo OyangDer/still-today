@@ -261,15 +261,20 @@ class Store {
       const veil = dark || airy ? 'transparent' : 'rgba(250, 250, 252, 0.5)';
       root.style.setProperty('--scrim', veil);
       root.style.setProperty('--sheen', 'none');
+      // The glass draws its own rim, as on the system's widgets; frosted keeps the page's as well.
+      if (airy) root.style.setProperty('--edge', 'none');
+      else root.style.removeProperty('--edge');
     } else if (aura) {
       const look = auraLook(this.aura, dark ? 'light' : 'dark');
       root.style.removeProperty('--sheen');
+      root.style.removeProperty('--edge');
       root.dataset.ink = look.ink;
       root.dataset.glass = this.glass ? 'on' : 'off';
       root.style.setProperty('--scrim', look.scrim);
       root.style.setProperty('--aura-fill', look.fill);
     } else {
       root.style.removeProperty('--sheen');
+      root.style.removeProperty('--edge');
       delete root.dataset.ink;
     }
     void call('material', { aura, dark, auto: mode === 'auto', clear: this.data.settings.clearGlass });

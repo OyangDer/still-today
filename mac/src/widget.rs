@@ -632,10 +632,13 @@ pub fn material(window: &WebviewWindow, aura: bool, clear: bool, dark: bool, the
     let _ = window.set_theme(theme);
     if aura && crate::glass::available() {
         let _ = window.set_effects(None);
-        crate::glass::apply(window, RADIUS, clear, dark);
+        let glass = crate::glass::apply(window, RADIUS, clear, dark);
+        // The system's widgets cast no shadow, and airy glass is theirs.
+        let _ = window.set_shadow(!(glass && clear));
         return;
     }
     crate::glass::clear(window);
+    let _ = window.set_shadow(true);
     let effects = aura.then(|| EffectsBuilder::new().effect(Effect::Popover).state(EffectState::Active).radius(RADIUS).build());
     let _ = window.set_effects(effects);
 }

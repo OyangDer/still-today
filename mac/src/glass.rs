@@ -22,9 +22,9 @@ pub fn apply(window: &WebviewWindow, radius: f64, airy: bool, dark: bool) -> boo
     let _ = clear_liquid_glass(window);
     let mut options = LiquidGlassOptions::new(NSGlassEffectViewStyle::Regular).radius(radius);
     // Dark glass alone is a milky grey; the system's widgets are near black with the wallpaper's hue
-    // showing through. Matched beside them on macOS 26.6: airy at 27%, frosted at 49%.
+    // showing through. Measured beside them on macOS 26.6: airy at 15%; frosted keeps its 49%.
     if dark {
-        options = options.tint_color((0, 0, 0, if airy { 69 } else { 125 }));
+        options = options.tint_color((0, 0, 0, if airy { 38 } else { 125 }));
     }
     available() && apply_liquid_glass(window, options).is_ok() && {
         if airy && !dark {
