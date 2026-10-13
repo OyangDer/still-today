@@ -94,16 +94,15 @@
     pointer-events: none;
   }
 
-  /* On airy glass the bar has no ground of its own, and its pill is a clear pane of the glass: a faint
-     white with a bright hairline rim, as the menus are. */
+  /* On airy glass the bar has no ground of its own, and its pill is clear: no fill, only a bright rim. */
   .band.liquid {
     background: transparent;
     border-top-color: transparent;
   }
 
   .band.liquid .pill {
-    background: rgba(255, 255, 255, 0.16);
-    box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.42);
+    background: transparent;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
   }
 
   .band.away .pill,
