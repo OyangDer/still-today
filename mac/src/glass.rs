@@ -14,22 +14,57 @@ pub fn available() -> bool {
     false
 }
 
-/// Liquid Glass behind the page, clipped to the widget's corner: clear as the system's widgets are, or
+/// Liquid Glass behind the page, clipped to the widget's corner: airy as the system's widgets are, or
 /// frosted. False where there is none.
 #[cfg(target_os = "macos")]
-pub fn apply(window: &WebviewWindow, radius: f64, clear: bool, dark: bool) -> bool {
+pub fn apply(window: &WebviewWindow, radius: f64, airy: bool, dark: bool) -> bool {
     use window_vibrancy::{apply_liquid_glass, clear_liquid_glass, LiquidGlassOptions, NSGlassEffectViewStyle};
     let _ = clear_liquid_glass(window);
-    let style = if clear { NSGlassEffectViewStyle::Clear } else { NSGlassEffectViewStyle::Regular };
-    let mut options = LiquidGlassOptions::new(style).radius(radius);
-    // Dark frosted glass alone is a milky grey; the system's widgets are near black with the wallpaper's
-    // hue showing through, matched beside them on macOS 27.
-    if !clear && dark {
-        options = options.tint_color((0, 0, 0, 125));
+    let mut options = LiquidGlassOptions::new(NSGlassEffectViewStyle::Regular).radius(radius);
+    // Dark glass alone is a milky grey; the system's widgets are near black with the wallpaper's hue
+    // showing through. Matched beside them, in the same spot, on macOS 26.6: airy at 35%, frosted at 49%.
+    if dark {
+        options = options.tint_color((0, 0, 0, if airy { 89 } else { 125 }));
     }
     available() && apply_liquid_glass(window, options).is_ok() && {
+        if airy && !dark {
+            widget_variant(window);
+        }
         keep_active(window);
         true
+    }
+}
+
+/// The tag window-vibrancy gives the glass view it adds, so it can be found again.
+#[cfg(target_os = "macos")]
+const GLASS_VIEW_TAG: isize = 96945937;
+
+/// The variant of Liquid Glass the system's light widgets wear: blurred like frosted glass, but tinted
+/// by the wallpaper rather than whitened. AppKit keeps the variants private; matched beside the
+/// widgets, in the same spot, on macOS 26.6. An AppKit without the setter keeps plain frosted glass.
+#[cfg(target_os = "macos")]
+const WIDGET_VARIANT: isize = 3;
+
+#[cfg(target_os = "macos")]
+fn widget_variant(window: &WebviewWindow) {
+    use objc2::runtime::{AnyObject, Bool};
+    use objc2::{msg_send, sel};
+    let Ok(ns) = window.ns_window() else { return };
+    // SAFETY: Tauri hands back the window's live NSWindow, and the glass view found by its tag is the
+    // NSGlassEffectView window-vibrancy just added. The setter is only sent where AppKit has it.
+    unsafe {
+        let content: *mut AnyObject = msg_send![ns as *mut AnyObject, contentView];
+        if content.is_null() {
+            return;
+        }
+        let glass: *mut AnyObject = msg_send![content, viewWithTag: GLASS_VIEW_TAG];
+        if glass.is_null() {
+            return;
+        }
+        let known: Bool = msg_send![glass, respondsToSelector: sel!(set_variant:)];
+        if known.as_bool() {
+            let _: () = msg_send![glass, set_variant: WIDGET_VARIANT];
+        }
     }
 }
 
