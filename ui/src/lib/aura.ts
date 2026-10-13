@@ -46,6 +46,9 @@ const css = (c: Rgb) => `rgb(${c.map((v) => Math.round(v)).join(', ')})`;
 const FROST = { scrim: [245, 249, 252] as Rgb, floor: 0.34, ink: [22, 35, 43] as Rgb, muted: [58, 73, 82] as Rgb };
 const SMOKE = { scrim: [16, 24, 32] as Rgb, floor: 0.3, ink: [241, 246, 248] as Rgb, muted: [201, 208, 212] as Rgb };
 
+// A little headroom so a moving window never lands right on the threshold.
+const HEADROOM = 0.03;
+
 /** `ink` is the one asked for, if any; otherwise the one the wallpaper suits. */
 export function auraLook(sample: AuraSample | null, ink?: AuraLook['ink']): AuraLook {
   const average = hex(sample?.average ?? '#5a6a78');
@@ -57,8 +60,7 @@ export function auraLook(sample: AuraSample | null, ink?: AuraLook['ink']): Aura
     const surface = over(mode.scrim, alpha, worst);
     if (contrast(mode.ink, surface) >= 4.5 && contrast(mode.muted, surface) >= 4.5) break;
   }
-  // A little headroom so a moving window never lands right on the threshold.
-  alpha = Math.min(0.88, alpha + 0.03);
+  alpha = Math.min(0.88, alpha + HEADROOM);
   const [r, g, b] = mode.scrim;
   const light = over(hex(sample?.brightest ?? '#ffffff'), 0.35, average);
   const deep = over(hex(sample?.darkest ?? '#000000'), 0.35, average);
@@ -67,4 +69,19 @@ export function auraLook(sample: AuraSample | null, ink?: AuraLook['ink']): Aura
     scrim: `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(2)})`,
     fill: `linear-gradient(160deg, ${css(light)}, ${css(average)} 55%, ${css(deep)})`,
   };
+}
+
+// Mist is Aura on the Mac, which does not sample the wallpaper yet: the scrim Aura lays over a
+// wallpaper that asks for no more than its floor. DWM's blur, under Aura on Windows, also dims what it
+// blurs; the window server's keeps the colours. Measured on Windows 11 over plain greys, the card maps
+// a grey g to 0.527 g + 96, which is this grey under the light scrim. Mist lays it under the scrim too.
+const DWM_DIM = { color: [44, 44, 44] as Rgb, alpha: 0.164 };
+
+/** Aura's card for the ink asked for, without a wallpaper to sample: one colour over the Mac's blur. */
+export function mistLook(ink: AuraLook['ink']): Pick<AuraLook, 'ink' | 'scrim'> {
+  const mode = ink === 'dark' ? FROST : SMOKE;
+  const alpha = mode.floor + HEADROOM;
+  const total = 1 - (1 - alpha) * (1 - DWM_DIM.alpha);
+  const color = mode.scrim.map((c, i) => (c * alpha + DWM_DIM.color[i] * DWM_DIM.alpha * (1 - alpha)) / total) as Rgb;
+  return { ink, scrim: `rgba(${color.map((v) => Math.round(v)).join(', ')}, ${total.toFixed(3)})` };
 }

@@ -45,7 +45,8 @@
     if (app.liquid) void call('pill', { x, start, ms, show: liquid && !app.tabBarAway });
   });
 
-  const liquid = $derived(app.liquid && app.data.settings.aura);
+  // Airy glass only: Mist keeps the page's own bar and pill, as on Windows.
+  const liquid = $derived(app.liquid && app.data.settings.aura && app.data.settings.clearGlass);
 </script>
 
 <div class="band" class:away={app.tabBarAway} class:liquid bind:this={band} role="tablist">

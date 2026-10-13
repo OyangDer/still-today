@@ -1,4 +1,4 @@
-import { auraLook } from './aura';
+import { auraLook, mistLook } from './aura';
 import { isCanvasFeed } from './agenda';
 import {
   fetchAnnouncements,
@@ -251,20 +251,24 @@ class Store {
     root.dataset.theme = aura ? 'aura' : dark ? 'dark' : 'light';
     const liquid = aura && this.liquid;
     root.dataset.liquid = liquid ? 'on' : 'off';
-    if (liquid) {
+    if (liquid && this.data.settings.clearGlass) {
       // The look alone decides how the card looks; the system's only decides which look auto is. Airy
-      // glass is the system widgets' own: white ink in either look. The host dims the glass itself; in
-      // the dark look a thin grey over it keeps the wallpaper as clear as theirs (mac/src/glass.rs).
-      // Frosted glass is whiter and firmer, with dark ink in the light look.
-      const airy = this.data.settings.clearGlass;
-      root.dataset.ink = dark || airy ? 'light' : 'dark';
+      // glass is the system widgets' own: white ink in either look, and the glass draws its own rim. The
+      // host dims the glass itself; in the dark look a thin grey over it keeps the wallpaper as clear as
+      // theirs (mac/src/glass.rs).
+      root.dataset.ink = 'light';
       root.dataset.glass = 'on';
-      const veil = airy ? (dark ? 'rgba(73, 73, 73, 0.2)' : 'transparent') : dark ? 'transparent' : 'rgba(250, 250, 252, 0.5)';
-      root.style.setProperty('--scrim', veil);
+      root.style.setProperty('--scrim', dark ? 'rgba(73, 73, 73, 0.2)' : 'transparent');
       root.style.setProperty('--sheen', 'none');
-      // The glass draws its own rim, as on the system's widgets; frosted keeps the page's as well.
-      if (airy) root.style.setProperty('--edge', 'none');
-      else root.style.removeProperty('--edge');
+      root.style.setProperty('--edge', 'none');
+    } else if (liquid) {
+      // Mist is the Windows widget's Aura over the window server's blur: its scrim, sheen and rim.
+      const look = mistLook(dark ? 'light' : 'dark');
+      root.style.removeProperty('--sheen');
+      root.style.removeProperty('--edge');
+      root.dataset.ink = look.ink;
+      root.dataset.glass = 'on';
+      root.style.setProperty('--scrim', look.scrim);
     } else if (aura) {
       const look = auraLook(this.aura, dark ? 'light' : 'dark');
       root.style.removeProperty('--sheen');

@@ -14,27 +14,34 @@ pub fn available() -> bool {
     false
 }
 
-/// Liquid Glass behind the page, clipped to the widget's corner: airy as the system's widgets are, or
-/// frosted. False where there is none.
+/// Liquid Glass behind the page, clipped to the widget's corner, airy as the system's widgets are.
+/// False where there is none.
 #[cfg(target_os = "macos")]
-pub fn apply(window: &WebviewWindow, radius: f64, airy: bool, dark: bool) -> bool {
+pub fn apply(window: &WebviewWindow, radius: f64, dark: bool) -> bool {
     use window_vibrancy::{apply_liquid_glass, clear_liquid_glass, LiquidGlassOptions, NSGlassEffectViewStyle};
     let _ = clear_liquid_glass(window);
-    let mut options = LiquidGlassOptions::new(NSGlassEffectViewStyle::Regular).radius(radius);
-    // Frosted's dark glass alone is a milky grey; tinted black, it is near black with the wallpaper's
-    // hue showing through.
-    if dark && !airy {
-        options = options.tint_color((0, 0, 0, 125));
-    }
+    let options = LiquidGlassOptions::new(NSGlassEffectViewStyle::Regular).radius(radius);
     available() && apply_liquid_glass(window, options).is_ok() && {
-        if airy {
-            widget_glass(window, dark);
-        }
-        window_blur(window, if airy { WIDGET_BLUR } else { 0 });
+        widget_glass(window, dark);
+        window_blur(window, WIDGET_BLUR);
         keep_active(window);
         true
     }
 }
+
+/// Mist, the Windows widget's Aura: no glass, only the window server's blur behind the page, which
+/// lays Aura's scrim over it (ui/src/lib/aura.ts).
+#[cfg(target_os = "macos")]
+pub fn mist(window: &WebviewWindow) {
+    let _ = window_vibrancy::clear_liquid_glass(window);
+    window_blur(window, MIST_BLUR);
+}
+
+/// How far Aura's blur spreads on Windows 11, matched the same way as airy glass below: over the same
+/// stripes, a stripe's first harmonic keeps 0.655 of itself under DWM's blur, and as much under the
+/// window server's at this radius in points.
+#[cfg(target_os = "macos")]
+const MIST_BLUR: i32 = 54;
 
 /// The tag window-vibrancy gives the glass view it adds, so it can be found again.
 #[cfg(target_os = "macos")]
@@ -135,7 +142,7 @@ fn window_blur(window: &WebviewWindow, radius: i32) {
 }
 
 /// The window server blurs and shadows a borderless window as a rectangle. This mask gives the window
-/// the card's rounded corners there too, so the blur behind the glass ends where the glass does.
+/// the card's rounded corners there too, so its blur ends where the card does.
 #[cfg(target_os = "macos")]
 pub fn round_window(window: &WebviewWindow, radius: f64) {
     use block2::RcBlock;
@@ -145,43 +152,47 @@ pub fn round_window(window: &WebviewWindow, radius: f64) {
     use objc2::{msg_send, sel};
     use objc2_app_kit::{NSBezierPath, NSColor, NSImage, NSImageResizingMode};
     use objc2_foundation::{NSEdgeInsets, NSRect, NSSize};
+    use std::panic::AssertUnwindSafe;
     use std::sync::atomic::{AtomicPtr, Ordering};
 
     static MASK: AtomicPtr<AnyObject> = AtomicPtr::new(std::ptr::null_mut());
     extern "C-unwind" fn mask(_: &AnyObject, _: Sel) -> *mut AnyObject {
         MASK.load(Ordering::Relaxed)
     }
-    if MASK.load(Ordering::Relaxed).is_null() {
-        let draw = RcBlock::new(move |rect: NSRect| -> Bool {
-            NSColor::blackColor().set();
-            NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(rect, radius, radius).fill();
-            Bool::YES
-        });
-        let side = radius * 2.0 + 1.0;
-        let image = NSImage::imageWithSize_flipped_drawingHandler(NSSize::new(side, side), false, &draw);
-        image.setCapInsets(NSEdgeInsets { top: radius, left: radius, bottom: radius, right: radius });
-        image.setResizingMode(NSImageResizingMode::Stretch);
-        // Kept for the life of the app: the window asks for it again whenever its shape changes.
-        MASK.store(Retained::into_raw(image).cast(), Ordering::Relaxed);
-    }
     let Ok(ns) = window.ns_window() else { return };
-    // SAFETY: as in keep_active, the override reaches only Tauri's own NSWindow subclass. The mask is
-    // retained above and never released.
-    unsafe {
-        let class = (*(ns as *const AnyObject)).class() as *const AnyClass;
-        let name = sel!(_cornerMask);
-        let method = class_getInstanceMethod(class, name);
-        if method.is_null() {
-            return;
+    let ns = ns as *mut AnyObject;
+    // This runs while the app finishes launching, where an Objective-C exception would end it: one
+    // from these private corners only costs the window its rounded blur.
+    let rounded = objc2::exception::catch(AssertUnwindSafe(|| {
+        if MASK.load(Ordering::Relaxed).is_null() {
+            let draw = RcBlock::new(move |rect: NSRect| -> Bool {
+                NSColor::blackColor().set();
+                NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(rect, radius, radius).fill();
+                Bool::YES
+            });
+            let side = radius * 2.0 + 1.0;
+            let image = NSImage::imageWithSize_flipped_drawingHandler(NSSize::new(side, side), false, &draw);
+            image.setCapInsets(NSEdgeInsets { top: radius, left: radius, bottom: radius, right: radius });
+            image.setResizingMode(NSImageResizingMode::Stretch);
+            // Kept for the life of the app: the window asks for it again whenever its shape changes.
+            MASK.store(Retained::into_raw(image).cast(), Ordering::Relaxed);
         }
-        let imp: Imp = std::mem::transmute(mask as extern "C-unwind" fn(&AnyObject, Sel) -> *mut AnyObject);
-        class_replaceMethod(class as *mut AnyClass, name, imp, method_getTypeEncoding(method));
-        let ns = ns as *mut AnyObject;
-        let known: Bool = msg_send![ns, respondsToSelector: sel!(_cornerMaskChanged)];
-        if known.as_bool() {
-            let _: () = msg_send![ns, _cornerMaskChanged];
+        // SAFETY: as in keep_active, the override reaches only Tauri's own NSWindow subclass. The mask
+        // is retained above and never released.
+        unsafe {
+            let class = (*ns).class() as *const AnyClass;
+            let name = sel!(_cornerMask);
+            let method = class_getInstanceMethod(class, name);
+            if method.is_null() {
+                return;
+            }
+            let imp: Imp = std::mem::transmute(mask as extern "C-unwind" fn(&AnyObject, Sel) -> *mut AnyObject);
+            class_replaceMethod(class as *mut AnyClass, name, imp, method_getTypeEncoding(method));
+            let _: () = msg_send![ns, invalidateShadow];
         }
-        let _: () = msg_send![ns, invalidateShadow];
+    }));
+    if let Err(exception) = rounded {
+        eprintln!("glass: no rounded corners: {exception:?}");
     }
 }
 

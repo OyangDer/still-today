@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { auraLook } from './aura';
+import { auraLook, mistLook } from './aura';
 
 const alpha = (scrim: string) => Number(/, ([\d.]+)\)$/.exec(scrim)![1]);
 
@@ -20,5 +20,26 @@ describe('auraLook', () => {
     expect(alpha(calm.scrim)).toBeCloseTo(0.37, 2);
     expect(alpha(busy.scrim)).toBeGreaterThan(alpha(calm.scrim));
     expect(alpha(busy.scrim)).toBeLessThanOrEqual(0.88);
+  });
+});
+
+describe('mistLook', () => {
+  // Aura's card on Windows 11 over plain greys, measured below its sheen: the grey it shows for each.
+  const windows: [number, [number, number, number]][] = [
+    [39, [116, 117, 118]],
+    [127, [162, 163, 164]],
+    [224, [213, 214, 215]],
+  ];
+
+  it('shows a plain wallpaper as Aura does on Windows, over a blur that keeps its colours', () => {
+    const [r, g, b, a] = /rgba\((\d+), (\d+), (\d+), ([\d.]+)\)/.exec(mistLook('dark').scrim)!.slice(1).map(Number);
+    for (const [grey, shown] of windows) {
+      [r, g, b].forEach((c, i) => expect(Math.abs(c * a + grey * (1 - a) - shown[i])).toBeLessThan(1.5));
+    }
+  });
+
+  it('smokes the card for light ink', () => {
+    expect(mistLook('light').ink).toBe('light');
+    expect(mistLook('light').scrim).toBe('rgba(23, 29, 35, 0.440)');
   });
 });

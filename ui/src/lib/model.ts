@@ -10,7 +10,7 @@ export type Lang = 'zh' | 'en';
 export interface Settings {
   /** The desktop showing through the widget, in light or dark as `mode` says. */
   aura: boolean;
-  /** Behind Aura on macOS 26: airy Liquid Glass, as the system's widgets wear it, else frosted. */
+  /** Behind Aura on macOS 26: airy Liquid Glass, as the system's widgets wear it, else Mist, the Windows widget's Aura. */
   clearGlass: boolean;
   mode: Mode;
   lang: Lang;

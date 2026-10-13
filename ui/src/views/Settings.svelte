@@ -30,7 +30,7 @@
   $effect(() => {
     if (lang !== app.data.settings.lang) app.setLanguage(lang);
   });
-  let glassLook = $state(app.data.settings.clearGlass ? 'clear' : 'frosted');
+  let glassLook = $state(app.data.settings.clearGlass ? 'clear' : 'mist');
   $effect(() => {
     const clearGlass = glassLook === 'clear';
     if (clearGlass !== app.data.settings.clearGlass) app.setAppearance({ clearGlass });
@@ -191,7 +191,7 @@
             bind:value={glassLook}
             options={[
               { value: 'clear', label: t('glass.clear') },
-              { value: 'frosted', label: t('glass.frosted') },
+              { value: 'mist', label: t('glass.mist') },
             ]}
           />
         </div>
