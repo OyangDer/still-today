@@ -248,8 +248,8 @@
 
   .clock {
     display: flex;
-    font: 300 72px/1 var(--font-display);
-    letter-spacing: -1.5px;
+    font: 300 60px/1 var(--font-display);
+    letter-spacing: -2px;
     font-variation-settings: 'wght' 270;
   }
 
@@ -273,6 +273,7 @@
     padding-bottom: 7px;
     font-size: 13px;
     color: var(--muted);
+    white-space: nowrap;
   }
 
   .date {
