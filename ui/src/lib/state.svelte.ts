@@ -253,12 +253,12 @@ class Store {
     root.dataset.liquid = liquid ? 'on' : 'off';
     if (liquid) {
       // The look alone decides how the card looks; the system's only decides which look auto is. Airy
-      // glass is the system widgets' own: white ink in either look, the light one under a breath of
-      // white to match them. Frosted glass is whiter and firmer, with dark ink in the light look.
+      // glass is the system widgets' own: white ink in either look, nothing over it (the host dims the
+      // glass itself). Frosted glass is whiter and firmer, with dark ink in the light look.
       const airy = this.data.settings.clearGlass;
       root.dataset.ink = dark || airy ? 'light' : 'dark';
       root.dataset.glass = 'on';
-      const veil = dark ? 'transparent' : airy ? 'rgba(255, 255, 255, 0.06)' : 'rgba(250, 250, 252, 0.5)';
+      const veil = dark || airy ? 'transparent' : 'rgba(250, 250, 252, 0.5)';
       root.style.setProperty('--scrim', veil);
       root.style.setProperty('--sheen', 'none');
     } else if (aura) {

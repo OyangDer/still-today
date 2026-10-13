@@ -45,6 +45,11 @@ const GLASS_VIEW_TAG: isize = 96945937;
 #[cfg(target_os = "macos")]
 const WIDGET_VARIANT: isize = 3;
 
+/// The variant alone sits a little lighter than the wallpaper; the system's widgets a little darker,
+/// with the wallpaper's hue kept. A black tint of 22% matched them, in the same spot, on macOS 26.6.
+#[cfg(target_os = "macos")]
+const WIDGET_DIM: f64 = 0.22;
+
 #[cfg(target_os = "macos")]
 fn widget_variant(window: &WebviewWindow) {
     use objc2::runtime::{AnyObject, Bool};
@@ -64,6 +69,9 @@ fn widget_variant(window: &WebviewWindow) {
         let known: Bool = msg_send![glass, respondsToSelector: sel!(set_variant:)];
         if known.as_bool() {
             let _: () = msg_send![glass, set_variant: WIDGET_VARIANT];
+            // Tinted after the variant, as it was matched.
+            let tint = objc2_app_kit::NSColor::colorWithSRGBRed_green_blue_alpha(0.0, 0.0, 0.0, WIDGET_DIM);
+            let _: () = msg_send![glass, setTintColor: &*tint];
         }
     }
 }
