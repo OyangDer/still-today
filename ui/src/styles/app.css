@@ -137,6 +137,12 @@
   --pop-blur: blur(24px) saturate(1.6);
   --pop-shadow: 0 14px 34px -14px rgba(0, 0, 0, 0.4), 0 0 0 0.5px rgba(255, 255, 255, 0.26);
 }
+
+/* The Mac thickens type a touch as it draws it; antialiased turns that off, and white type on the glass
+   read thin. */
+:root[data-os='mac'] body {
+  -webkit-font-smoothing: auto;
+}
 /* ---- base -------------------------------------------------------------------------------- */
 
 * {

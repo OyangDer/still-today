@@ -270,12 +270,17 @@ class Store {
         root.style.setProperty('--pop', 'rgba(255, 255, 255, 0.2)');
         root.style.setProperty('--pop-shadow', '0 12px 30px -14px rgba(0, 0, 0, 0.28), 0 0 0 0.5px rgba(255, 255, 255, 0.45)');
       }
+      // Its secondary ink a step brighter than smoked glass's, so it still reads over a light wallpaper.
+      root.style.setProperty('--muted', 'rgba(236, 242, 248, 0.88)');
+      root.style.setProperty('--faint', 'rgba(236, 242, 248, 0.66)');
     } else if (liquid) {
       // Mist is the Windows widget's Aura over the window server's blur: its scrim, sheen and rim.
       const look = mistLook(dark ? 'light' : 'dark');
       root.style.removeProperty('--sheen');
       root.style.removeProperty('--pop');
       root.style.removeProperty('--pop-shadow');
+      root.style.removeProperty('--muted');
+      root.style.removeProperty('--faint');
       root.style.removeProperty('--edge');
       root.dataset.ink = look.ink;
       root.dataset.glass = 'on';
@@ -285,6 +290,8 @@ class Store {
       root.style.removeProperty('--sheen');
       root.style.removeProperty('--pop');
       root.style.removeProperty('--pop-shadow');
+      root.style.removeProperty('--muted');
+      root.style.removeProperty('--faint');
       root.style.removeProperty('--edge');
       root.dataset.ink = look.ink;
       root.dataset.glass = this.glass ? 'on' : 'off';
@@ -294,6 +301,8 @@ class Store {
       root.style.removeProperty('--sheen');
       root.style.removeProperty('--pop');
       root.style.removeProperty('--pop-shadow');
+      root.style.removeProperty('--muted');
+      root.style.removeProperty('--faint');
       root.style.removeProperty('--edge');
       delete root.dataset.ink;
     }
