@@ -193,7 +193,7 @@
     </section>
 
     <section>
-      <h3>{t('canvas.title')}</h3>
+      <h3>{t(app.data.canvas.host && app.data.canvas.user !== null ? 'canvas.title' : 'canvas.connectTitle')}</h3>
       {#if app.data.canvas.host && app.data.canvas.user !== null}
         <div class="account" in:fade={{ duration: 200 }}>
           <span class="avatar">
