@@ -129,6 +129,14 @@
   --course-keep: 72%;
   color-scheme: dark;
 }
+
+/* On the Mac's glass a menu is frosted glass over the card, as the system's own are, not a solid
+   slab: the card's surface at part strength over the page blurred, with a hairline rim. */
+:root[data-liquid='on'] {
+  --pop: color-mix(in srgb, var(--raised) 72%, transparent);
+  --pop-blur: blur(24px) saturate(1.6);
+  --pop-shadow: 0 14px 34px -14px rgba(0, 0, 0, 0.4), 0 0 0 0.5px rgba(255, 255, 255, 0.26);
+}
 /* ---- base -------------------------------------------------------------------------------- */
 
 * {

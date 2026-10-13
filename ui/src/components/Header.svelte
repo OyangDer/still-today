@@ -376,8 +376,10 @@
     min-width: 150px;
     padding: 5px;
     border-radius: 12px;
-    background: var(--raised);
-    box-shadow: var(--shadow-pop);
+    background: var(--pop, var(--raised));
+    -webkit-backdrop-filter: var(--pop-blur, none);
+    backdrop-filter: var(--pop-blur, none);
+    box-shadow: var(--pop-shadow, var(--shadow-pop));
     transform-origin: top right;
     z-index: 20;
   }

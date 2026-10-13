@@ -114,8 +114,10 @@
     width: 264px;
     padding: 10px 10px 8px;
     border-radius: 14px;
-    background: var(--raised);
-    box-shadow: var(--shadow-pop);
+    background: var(--pop, var(--raised));
+    -webkit-backdrop-filter: var(--pop-blur, none);
+    backdrop-filter: var(--pop-blur, none);
+    box-shadow: var(--pop-shadow, var(--shadow-pop));
     transform-origin: top left;
     z-index: 40;
   }
