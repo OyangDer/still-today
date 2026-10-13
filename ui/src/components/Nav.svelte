@@ -1,6 +1,5 @@
 <script lang="ts">
   import { todos } from '../lib/agenda';
-  import { call } from '../lib/host';
   import { app, TABS } from '../lib/state.svelte';
   import { t } from '../lib/i18n';
   import { fade, follow, type Frame } from '../lib/motion';
@@ -16,6 +15,8 @@
   const TAB = 85;
   const PILL = 88;
   const PILL_MS = 280;
+  // Airy glass's capsule is lighter and moves quicker.
+  const CAPSULE_MS = 200;
   const centre = (w: number, i: number) => INSET + ((i + 0.5) * (w - 2 * INSET)) / 4;
 
   let band = $state<HTMLElement>();
@@ -25,6 +26,8 @@
   let placed: Frame | undefined;
 
   const index = $derived(TABS.indexOf(app.tab));
+  // Airy glass only: Mist keeps the page's own bar and pill, as on Windows.
+  const liquid = $derived(app.liquid && app.data.settings.aura && app.data.settings.clearGlass);
   const updates = $derived(todos(app.data).some((i) => i.updated));
 
   $effect(() => {
@@ -38,15 +41,10 @@
   $effect(() => {
     const x = centre(frame.w, index) - PILL / 2;
     const to = `translate3d(${x}px, 0, 0)`;
-    const [start, ms] = placed === frame ? [Date.now(), PILL_MS] : [frame.start, frame.ms];
+    const [start, ms] = placed === frame ? [Date.now(), liquid ? CAPSULE_MS : PILL_MS] : [frame.start, frame.ms];
     follow(pill!, to, start, ms);
     placed = frame;
-    // On macOS 26 the Mac draws the pill in Liquid Glass, just behind the page, on the same timeline.
-    if (app.liquid) void call('pill', { x, start, ms, show: liquid && !app.tabBarAway });
   });
-
-  // Airy glass only: Mist keeps the page's own bar and pill, as on Windows.
-  const liquid = $derived(app.liquid && app.data.settings.aura && app.data.settings.clearGlass);
 </script>
 
 <div class="band" class:away={app.tabBarAway} class:liquid bind:this={band} role="tablist">
@@ -93,14 +91,25 @@
     pointer-events: none;
   }
 
-  /* The Mac's Liquid Glass stands in for the bar's ground and its pill. */
+  /* On airy glass the bar has no ground of its own. */
   .band.liquid {
     background: transparent;
     border-top-color: transparent;
   }
 
+  /* Its pill is a faint capsule, a shade lighter than the glass and flatter than the tab. Only the
+     chosen tab has one: a hovered tab just brightens its label, so the two never look alike. */
   .band.liquid .pill {
-    visibility: hidden;
+    top: 12px;
+    left: 6px;
+    width: 76px;
+    height: 28px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.32);
+  }
+
+  :global(:root[data-ink='light']) .band.liquid .pill {
+    background: rgba(255, 255, 255, 0.13);
   }
 
   .band.away .pill,
