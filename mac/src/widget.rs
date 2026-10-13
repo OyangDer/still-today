@@ -379,7 +379,12 @@ pub fn watch_mission_control(window: &WebviewWindow) {
     std::thread::spawn(move || loop {
         std::thread::sleep(Duration::from_millis(250));
         let target = window.clone();
-        let _ = window.run_on_main_thread(move || conceal(&target, overview(number)));
+        // Put away in the menu bar, the widget has nothing to hide, and the list isn't read.
+        let _ = window.run_on_main_thread(move || {
+            if target.is_visible().unwrap_or(true) {
+                conceal(&target, overview(number));
+            }
+        });
     });
 }
 
