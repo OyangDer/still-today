@@ -633,12 +633,13 @@ pub fn material(window: &WebviewWindow, aura: bool, clear: bool, dark: bool, the
     let _ = window.set_theme(theme);
     if aura && crate::glass::available() {
         let _ = window.set_effects(None);
-        // The system's widgets cast no shadow, and airy glass is theirs; Mist keeps the Windows widget's.
+        // The system's widgets cast no shadow. Neither does airy glass, which is theirs, nor Mist, which
+        // sits among them: the Windows widget's shadow read as a blurred rim beside them.
         let shadow = if clear {
             !crate::glass::apply(window, RADIUS, dark)
         } else {
             crate::glass::mist(window);
-            true
+            false
         };
         let _ = window.set_shadow(shadow);
         return;
