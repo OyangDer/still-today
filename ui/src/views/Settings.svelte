@@ -5,6 +5,7 @@
   import { app, normalizeHost } from '../lib/state.svelte';
   import { monthDay, t, timeOrDate, weekdayShort } from '../lib/i18n';
   import { dayKey, fromDayKey, hhmm, parseIso } from '../lib/time';
+  import { onMount } from 'svelte';
   import { slide } from 'svelte/transition';
   import { easeOut, fade, isReduced, move } from '../lib/motion';
   import type { Lang, Mode } from '../lib/model';
@@ -63,6 +64,15 @@
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name)),
   );
+  const linked = $derived(!!app.data.canvas.host && app.data.canvas.user !== null);
+  let schoolInput = $state<HTMLInputElement>();
+  // Opened before Canvas is connected, the page is there to connect it: the school field takes the
+  // keys once the page has slid in.
+  onMount(() => {
+    if (linked) return;
+    const timer = window.setTimeout(() => schoolInput?.focus({ preventScroll: true }), 360);
+    return () => clearTimeout(timer);
+  });
   const canvasSync = $derived(parseIso(app.data.canvas.lastSync));
   const initials = $derived((app.data.canvas.user ?? '?').split(/\s+/).map((p) => p[0]).join('').slice(0, 2).toUpperCase());
 
@@ -166,9 +176,146 @@
   </div>
 {/snippet}
 
+<!-- Not yet connected, Canvas comes before everything else: nothing shows until it is. -->
+{#snippet canvas()}
+  <section class:invite={!linked}>
+    <h3>{t('canvas.title')}</h3>
+    {#if !linked}<p class="lead">{t('canvas.lead')}</p>{/if}
+    {#if app.data.canvas.host && app.data.canvas.user !== null}
+      <div class="account" in:fade={{ duration: 200 }}>
+        <span class="avatar">
+          {#if app.canvasAvatar}<img src={app.canvasAvatar} alt="" />{:else}{initials}{/if}
+        </span>
+        <span class="who">
+          <span class="name ellipsis">{app.data.canvas.user}</span>
+          <span class="sub ellipsis">{app.data.canvas.host}{canvasSync ? ` · ${t('sync.last', { t: timeOrDate(canvasSync, app.now) })}` : ''}</span>
+        </span>
+        <button class="text-btn" class:danger={!disconnecting} onclick={() => (disconnecting = !disconnecting)}>
+          {t(disconnecting ? 'cancel' : 'canvas.disconnect')}
+        </button>
+      </div>
+      <!-- Disconnecting drops every synced assignment and what the student marked on it, for good. It
+           says so first, and the button that does it sits away from the one that asked, so a double
+           click lands on Cancel. -->
+      {#if disconnecting}
+        <div class="disconnect" in:fade={{ duration: 200 }}>
+          <p class="hint error">{t('canvas.warn')}</p>
+          <button class="text-btn armed" onclick={() => ((disconnecting = false), void app.disconnectCanvas())}>{t('canvas.confirm')}</button>
+        </div>
+      {/if}
+      {#if app.data.canvas.error === 'token'}<p class="hint error">{t('sync.token')}</p>{/if}
+      <div class="line">
+        <span>{t('canvas.token')}</span>
+        <button
+          class="text-btn"
+          onclick={() => {
+            replacing = !replacing;
+            token = '';
+            canvasError = '';
+          }}>{t(replacing ? 'cancel' : 'canvas.replace')}</button
+        >
+      </div>
+      {#if replacing}
+        <div class="replace" in:fade={{ duration: 200 }}>
+          {@render guide(app.data.canvas.host)}
+          <form
+            class="inline"
+            onsubmit={(e) => {
+              e.preventDefault();
+              void connect(app.data.canvas.host!);
+            }}
+          >
+            <input class="input" type="password" bind:value={token} placeholder={t('canvas.token')} aria-label={t('canvas.token')} />
+            <button class="btn quiet" type="submit" disabled={canvasBusy || !token.trim()}>{canvasBusy ? t('canvas.verifying') : t('canvas.connect')}</button>
+          </form>
+          {#if canvasError}<p class="hint error">{canvasError}</p>{/if}
+        </div>
+      {/if}
+      <div class="line">
+        <span>{t('canvas.expires')}</span>
+        {#if app.data.canvas.tokenExpiresFromCanvas}
+          {@const expires = app.data.canvas.tokenExpires ? fromDayKey(app.data.canvas.tokenExpires) : null}
+          <span>{expires ? `${monthDay(expires)} ${weekdayShort(expires)}` : t('canvas.expiresNever')}</span>
+        {:else}
+          <div class="expires">
+            <DateField
+              bind:value={
+                () => (app.data.canvas.tokenExpires ? fromDayKey(app.data.canvas.tokenExpires) : null),
+                (d) => {
+                  app.data.canvas.tokenExpires = d ? dayKey(d) : null;
+                  app.persist();
+                }
+              }
+              placeholder={t('canvas.expiresNone')}
+              clearable
+            />
+          </div>
+        {/if}
+      </div>
+      {#if !app.data.canvas.tokenExpiresFromCanvas && !app.data.canvas.tokenExpires}<p class="hint">{t('canvas.expiresAsk')}</p>{/if}
+      <div class="toggles">
+        <Toggle
+          checked={app.data.settings.notifications}
+          label={t('settings.notifications')}
+          onchange={(v) => {
+            app.data.settings.notifications = v;
+            app.persist();
+          }}
+        />
+      </div>
+    {:else}
+      <form
+        class="connect"
+        onsubmit={(e) => {
+          e.preventDefault();
+          if (host) void connect(host);
+        }}
+      >
+        <input
+          class="input"
+          bind:this={schoolInput}
+          bind:value={school}
+          oninput={search}
+          onkeydown={schoolKey}
+          placeholder={t('canvas.schoolHint')}
+          spellcheck="false"
+          autocomplete="off"
+          aria-label={t('canvas.school')}
+        />
+        {#if listed.length}
+          <div class="schools" role="listbox" aria-label={t('canvas.school')}>
+            {#each listed as s, i (s.domain)}
+              <button type="button" class="school" class:active={i === active} role="option" aria-selected={i === active} onpointerenter={() => (active = i)} onclick={() => choose(s)}>
+                <span class="name ellipsis">{s.name}</span>
+                <span class="sub ellipsis">{s.domain}</span>
+              </button>
+            {/each}
+          </div>
+        {:else if answered && !host}
+          <p class="hint" class:error={schools === null}>{t(schools === null ? 'canvas.schoolOffline' : 'canvas.noSchool')}</p>
+        {:else if chosen}
+          <p class="hint">{chosen.domain}</p>
+        {/if}
+        {#if host}
+          <div class="steps" in:fade={{ duration: 200 }}>
+            {@render guide(host)}
+            <input class="input" type="password" bind:value={token} placeholder={t('canvas.token')} aria-label={t('canvas.token')} />
+            {#if canvasError}<p class="hint error" transition:fade={{ duration: 150 }}>{canvasError}</p>{/if}
+            <button class="btn primary" type="submit" disabled={canvasBusy || !token.trim()}>
+              {canvasBusy ? t('canvas.verifying') : t('canvas.connect')}
+            </button>
+          </div>
+        {/if}
+      </form>
+    {/if}
+  </section>
+{/snippet}
+
 <div class="settings">
   <PageHeader title={t('settings.title')} />
   <div class="content scroll">
+    {#if !linked}{@render canvas()}{/if}
+
     <section>
       <h3>{t('settings.appearance')}</h3>
       <!-- Aura lays the desktop under whichever of light and dark is chosen; each card previews both together. -->
@@ -210,135 +357,7 @@
       </div>
     </section>
 
-    <section>
-      <h3>{t('canvas.title')}</h3>
-      {#if app.data.canvas.host && app.data.canvas.user !== null}
-        <div class="account" in:fade={{ duration: 200 }}>
-          <span class="avatar">
-            {#if app.canvasAvatar}<img src={app.canvasAvatar} alt="" />{:else}{initials}{/if}
-          </span>
-          <span class="who">
-            <span class="name ellipsis">{app.data.canvas.user}</span>
-            <span class="sub ellipsis">{app.data.canvas.host}{canvasSync ? ` · ${t('sync.last', { t: timeOrDate(canvasSync, app.now) })}` : ''}</span>
-          </span>
-          <button class="text-btn" class:danger={!disconnecting} onclick={() => (disconnecting = !disconnecting)}>
-            {t(disconnecting ? 'cancel' : 'canvas.disconnect')}
-          </button>
-        </div>
-        <!-- Disconnecting drops every synced assignment and what the student marked on it, for good. It
-             says so first, and the button that does it sits away from the one that asked, so a double
-             click lands on Cancel. -->
-        {#if disconnecting}
-          <div class="disconnect" in:fade={{ duration: 200 }}>
-            <p class="hint error">{t('canvas.warn')}</p>
-            <button class="text-btn armed" onclick={() => ((disconnecting = false), void app.disconnectCanvas())}>{t('canvas.confirm')}</button>
-          </div>
-        {/if}
-        {#if app.data.canvas.error === 'token'}<p class="hint error">{t('sync.token')}</p>{/if}
-        <div class="line">
-          <span>{t('canvas.token')}</span>
-          <button
-            class="text-btn"
-            onclick={() => {
-              replacing = !replacing;
-              token = '';
-              canvasError = '';
-            }}>{t(replacing ? 'cancel' : 'canvas.replace')}</button
-          >
-        </div>
-        {#if replacing}
-          <div class="replace" in:fade={{ duration: 200 }}>
-            {@render guide(app.data.canvas.host)}
-            <form
-              class="inline"
-              onsubmit={(e) => {
-                e.preventDefault();
-                void connect(app.data.canvas.host!);
-              }}
-            >
-              <input class="input" type="password" bind:value={token} placeholder={t('canvas.token')} aria-label={t('canvas.token')} />
-              <button class="btn quiet" type="submit" disabled={canvasBusy || !token.trim()}>{canvasBusy ? t('canvas.verifying') : t('canvas.connect')}</button>
-            </form>
-            {#if canvasError}<p class="hint error">{canvasError}</p>{/if}
-          </div>
-        {/if}
-        <div class="line">
-          <span>{t('canvas.expires')}</span>
-          {#if app.data.canvas.tokenExpiresFromCanvas}
-            {@const expires = app.data.canvas.tokenExpires ? fromDayKey(app.data.canvas.tokenExpires) : null}
-            <span>{expires ? `${monthDay(expires)} ${weekdayShort(expires)}` : t('canvas.expiresNever')}</span>
-          {:else}
-            <div class="expires">
-              <DateField
-                bind:value={
-                  () => (app.data.canvas.tokenExpires ? fromDayKey(app.data.canvas.tokenExpires) : null),
-                  (d) => {
-                    app.data.canvas.tokenExpires = d ? dayKey(d) : null;
-                    app.persist();
-                  }
-                }
-                placeholder={t('canvas.expiresNone')}
-                clearable
-              />
-            </div>
-          {/if}
-        </div>
-        {#if !app.data.canvas.tokenExpiresFromCanvas && !app.data.canvas.tokenExpires}<p class="hint">{t('canvas.expiresAsk')}</p>{/if}
-        <div class="toggles">
-          <Toggle
-            checked={app.data.settings.notifications}
-            label={t('settings.notifications')}
-            onchange={(v) => {
-              app.data.settings.notifications = v;
-              app.persist();
-            }}
-          />
-        </div>
-      {:else}
-        <form
-          class="connect"
-          onsubmit={(e) => {
-            e.preventDefault();
-            if (host) void connect(host);
-          }}
-        >
-          <input
-            class="input"
-            bind:value={school}
-            oninput={search}
-            onkeydown={schoolKey}
-            placeholder={t('canvas.schoolHint')}
-            spellcheck="false"
-            autocomplete="off"
-            aria-label={t('canvas.school')}
-          />
-          {#if listed.length}
-            <div class="schools" role="listbox" aria-label={t('canvas.school')}>
-              {#each listed as s, i (s.domain)}
-                <button type="button" class="school" class:active={i === active} role="option" aria-selected={i === active} onpointerenter={() => (active = i)} onclick={() => choose(s)}>
-                  <span class="name ellipsis">{s.name}</span>
-                  <span class="sub ellipsis">{s.domain}</span>
-                </button>
-              {/each}
-            </div>
-          {:else if answered && !host}
-            <p class="hint" class:error={schools === null}>{t(schools === null ? 'canvas.schoolOffline' : 'canvas.noSchool')}</p>
-          {:else if chosen}
-            <p class="hint">{chosen.domain}</p>
-          {/if}
-          {#if host}
-            <div class="steps" in:fade={{ duration: 200 }}>
-              {@render guide(host)}
-              <input class="input" type="password" bind:value={token} placeholder={t('canvas.token')} aria-label={t('canvas.token')} />
-              {#if canvasError}<p class="hint error" transition:fade={{ duration: 150 }}>{canvasError}</p>{/if}
-              <button class="btn primary" type="submit" disabled={canvasBusy || !token.trim()}>
-                {canvasBusy ? t('canvas.verifying') : t('canvas.connect')}
-              </button>
-            </div>
-          {/if}
-        </form>
-      {/if}
-    </section>
+    {#if linked}{@render canvas()}{/if}
 
     <!-- A name only the student can choose: each field shows Canvas's name until they type their own. -->
     {#if app.data.canvas.host && courseList.length}
@@ -694,6 +713,30 @@
 
   .glass-hint {
     margin: -6px 0 4px;
+  }
+
+  /* Canvas before it is connected: the one thing to do here, set apart from the settings below. */
+  .invite {
+    margin: 2px 0 6px;
+    padding: 10px 10px 14px;
+    border-radius: var(--radius-l);
+    background: var(--accent-soft);
+  }
+
+  section.invite + section {
+    border-top: 0;
+  }
+
+  .invite h3 {
+    margin-bottom: 4px;
+    font-size: 13.5px;
+    color: var(--ink);
+  }
+
+  .lead {
+    margin: 0 6px 10px;
+    font-size: 12px;
+    color: var(--muted);
   }
 
   .connect .hint {
