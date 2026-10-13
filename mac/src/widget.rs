@@ -334,14 +334,11 @@ fn level(window: &WebviewWindow, topmost: bool) {
     ns.setLevel(if topmost { ON_TOP } else { UNDER });
 }
 
-/// Hides the widget while Mission Control or App Exposé is open, as the system's widgets are. Neither
-/// tells anyone it is open, so the window list is read four times a second, a 4pt transparent window
-/// of ours with it. Before macOS 26.6 Mission Control took transient windows such as that one off
-/// screen, and its occlusion changed as it did; since, the Dock gives both away:
-/// - Each covers the desktop with a full-screen window of the Dock's, a layer under the Dock's own.
-///   Show Desktop does too, and the widget stays there, as the system's do.
-/// - Mission Control adds a second window at the Dock's own layer. App Exposé shrinks the other
-///   apps' windows to a point, ours among them. Show Desktop only slides them aside.
+/// Hides the widget while Mission Control is open, as the system's widgets are. Mission Control
+/// tells no one it is open, but it hides transient windows, so a 1pt transparent one watches for it:
+/// it drops off screen then and only then (Show Desktop and other windows covering it leave it on
+/// screen), and its occlusion changes as it does. A slow check backs the notification up, so the
+/// widget can't stay hidden on a missed one.
 #[cfg(target_os = "macos")]
 pub fn watch_mission_control(window: &WebviewWindow) {
     use block2::RcBlock;
@@ -351,7 +348,7 @@ pub fn watch_mission_control(window: &WebviewWindow) {
     use objc2_foundation::{NSNotificationCenter, NSPoint, NSRect, NSSize};
 
     let Some(mtm) = MainThreadMarker::new() else { return };
-    let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(SENTINEL, SENTINEL));
+    let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(1.0, 1.0));
     // SAFETY: a plain borderless window, made on the main thread and kept for the app's life.
     let sentinel = unsafe { NSWindow::initWithContentRect_styleMask_backing_defer(NSWindow::alloc(mtm), frame, NSWindowStyleMask::Borderless, NSBackingStoreType::Buffered, false) };
     unsafe { sentinel.setReleasedWhenClosed(false) };
@@ -365,7 +362,7 @@ pub fn watch_mission_control(window: &WebviewWindow) {
     let number = sentinel.windowNumber();
 
     let watched = window.clone();
-    let changed = RcBlock::new(move |_: std::ptr::NonNull<objc2_foundation::NSNotification>| conceal(&watched, overview(number)));
+    let changed = RcBlock::new(move |_: std::ptr::NonNull<objc2_foundation::NSNotification>| conceal(&watched, !on_screen(number)));
     let object: &AnyObject = &sentinel;
     // SAFETY: the block only touches the main thread's windows, and the notification comes on the
     // posting thread, AppKit's main one. The observer and the window stay for the app's life.
@@ -377,71 +374,33 @@ pub fn watch_mission_control(window: &WebviewWindow) {
 
     let window = window.clone();
     std::thread::spawn(move || loop {
-        std::thread::sleep(Duration::from_millis(250));
+        std::thread::sleep(Duration::from_secs(2));
         let target = window.clone();
-        // Put away in the menu bar, the widget has nothing to hide, and the list isn't read.
-        let _ = window.run_on_main_thread(move || {
-            if target.is_visible().unwrap_or(true) {
-                conceal(&target, overview(number));
-            }
-        });
+        let _ = window.run_on_main_thread(move || conceal(&target, !on_screen(number)));
     });
 }
 
 #[cfg(not(target_os = "macos"))]
 pub fn watch_mission_control(_window: &WebviewWindow) {}
 
-// The watching window's side, in points.
+// Whether the Window Server has a window of ours on screen.
 #[cfg(target_os = "macos")]
-const SENTINEL: f64 = 4.0;
-
-// Whether Mission Control or App Exposé is open, by the window list (see watch_mission_control).
-// Reading it takes about half a millisecond.
-#[cfg(target_os = "macos")]
-fn overview(sentinel: isize) -> bool {
+fn on_screen(number: isize) -> bool {
     use objc2::rc::Retained;
     use objc2::runtime::AnyObject;
-    use objc2_app_kit::NSRunningApplication;
     use objc2_foundation::{NSArray, NSDictionary, NSNumber, NSString};
-    use std::sync::atomic::AtomicUsize;
 
     #[link(name = "CoreGraphics", kind = "framework")]
     extern "C" {
         fn CGWindowListCopyWindowInfo(option: u32, relative_to: u32) -> *mut NSArray<NSDictionary<NSString, AnyObject>>;
     }
-    const ON_SCREEN_ONLY: u32 = 1;
-    // The Dock's own layer, and its cover's.
-    const DOCK: i64 = 20;
-    const COVER: i64 = 18;
-    // The windows the Dock has at its own layer with no cover up: one per display, or so.
-    static USUAL: AtomicUsize = AtomicUsize::new(usize::MAX);
-
+    const INCLUDING_WINDOW: u32 = 1 << 3;
     // SAFETY: as in system_widgets.
-    let Some(list) = (unsafe { Retained::from_raw(CGWindowListCopyWindowInfo(ON_SCREEN_ONLY, 0)) }) else { return false };
-    let dock = NSRunningApplication::runningApplicationsWithBundleIdentifier(&NSString::from_str("com.apple.dock")).firstObject().map(|a| a.processIdentifier() as i64);
-    let number = |d: &NSDictionary<NSString, AnyObject>, key: &str| {
-        d.objectForKey(&NSString::from_str(key)).and_then(|v| v.downcast::<NSNumber>().ok()).map(|n| n.doubleValue())
-    };
-    let (mut shown, mut shrunk, mut covers, mut docks) = (false, false, 0, 0);
-    for info in list.iter() {
-        if number(&info, "kCGWindowNumber") == Some(sentinel as f64) {
-            shown = true;
-            let bounds = info.objectForKey(&NSString::from_str("kCGWindowBounds")).and_then(|b| b.downcast::<NSDictionary>().ok());
-            // SAFETY: kCGWindowBounds is a dictionary of numbers keyed by strings.
-            let width = bounds.and_then(|b| number(unsafe { &*(Retained::as_ptr(&b) as *const NSDictionary<NSString, AnyObject>) }, "Width"));
-            shrunk = width.is_some_and(|w| w < SENTINEL);
-        } else if dock.is_some() && number(&info, "kCGWindowOwnerPID").map(|p| p as i64) == dock {
-            match number(&info, "kCGWindowLayer").map(|l| l as i64) {
-                Some(COVER) => covers += 1,
-                Some(DOCK) => docks += 1,
-                _ => {}
-            }
-        }
-    }
-    if covers == 0 {
-        USUAL.store(docks, Ordering::Relaxed);
-    }
-    !shown || covers > 0 && (shrunk || docks > USUAL.load(Ordering::Relaxed))
+    let Some(list) = (unsafe { Retained::from_raw(CGWindowListCopyWindowInfo(INCLUDING_WINDOW, number as u32)) }) else { return true };
+    let Some(info) = list.firstObject() else { return true };
+    info.objectForKey(&NSString::from_str("kCGWindowIsOnscreen"))
+        .and_then(|v| v.downcast::<NSNumber>().ok())
+        .is_some_and(|on| on.boolValue())
 }
 
 // Hidden, the widget is clear and lets clicks through, and keeps its place and level. Mission Control
