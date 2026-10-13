@@ -40,6 +40,9 @@ internal sealed class WidgetForm : Form
     private bool _sizing;
     private int _energySaver;
     private int _batterySaver;
+    // Kept in a field for as long as the hook lives: Windows calls back through it.
+    private Native.WinEventProc _onRestored;
+    private IntPtr _restoredHook;
 
     public WidgetForm(string dataDir)
     {
@@ -95,6 +98,12 @@ internal sealed class WidgetForm : Form
         Native.RegisterPowerSettingNotification(Handle, ref saver, 0);
         var battery = Native.GUID_POWER_SAVING_STATUS;
         Native.RegisterPowerSettingNotification(Handle, ref battery, 0);
+        // A window brought back from minimized without being activated (as tools that clear the desktop and
+        // put it back do) keeps the bottom place minimizing gave it, under the widget. The widget's own
+        // z-order guard never hears of it, so it steps back under such a window itself.
+        _onRestored = OnWindowRestored;
+        _restoredHook = Native.SetWinEventHook(Native.EVENT_SYSTEM_MINIMIZEEND, Native.EVENT_SYSTEM_MINIMIZEEND, IntPtr.Zero,
+            _onRestored, 0, 0, Native.WINEVENT_OUTOFCONTEXT | Native.WINEVENT_SKIPOWNPROCESS);
 
         var options = new CoreWebView2EnvironmentOptions { AreBrowserExtensionsEnabled = false };
         var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(_dataDir, "WebView2"), options);
@@ -167,6 +176,12 @@ internal sealed class WidgetForm : Form
         base.OnDeactivate(e);
         if (!_presented) return;
         _presented = false;
+        Native.SetWindowPos(Handle, Native.HWND_BOTTOM, 0, 0, 0, 0, Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
+    }
+
+    private void OnWindowRestored(IntPtr hook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint thread, uint time)
+    {
+        if (idObject != Native.OBJID_WINDOW || _topmost || _presented || !Visible) return;
         Native.SetWindowPos(Handle, Native.HWND_BOTTOM, 0, 0, 0, 0, Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
     }
 
@@ -531,6 +546,7 @@ internal sealed class WidgetForm : Form
     protected override void Dispose(bool disposing)
     {
         if (disposing) _controller?.Close();
+        if (_restoredHook != IntPtr.Zero) Native.UnhookWinEvent(_restoredHook);
         base.Dispose(disposing);
     }
 }
