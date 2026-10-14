@@ -393,9 +393,11 @@
   }
 
   /* Both rows share one cell while they swap, and the cell keeps the full row's height, so the card
-     does not change size under them. */
+     does not change size under them. The cell is held to the card's width: sized by its content, a long
+     task title stretched it and pushed the start button off the card. */
   .controls {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     align-items: center;
     min-height: 38px;
     margin-top: 12px;
