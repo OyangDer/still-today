@@ -235,7 +235,7 @@
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
-    gap: 10px;
+    gap: 8px;
     padding: 14px 0 16px;
     border-bottom: 1px solid var(--line);
   }
@@ -243,20 +243,19 @@
   .time {
     display: flex;
     align-items: flex-end;
-    gap: 8px;
+    gap: 6px;
   }
 
   .clock {
     display: flex;
-    font: 300 72px/1 var(--font-display);
-    letter-spacing: -1.5px;
-    font-variation-settings: 'wght' 270;
-  }
-
-  /* SF's figures run wider than Segoe's; at 72px the date beside them is pushed out of the card. */
-  :global([data-os='mac']) .clock {
-    font-size: 60px;
+    font: 300 54px/1 var(--font-display);
+    /* The font shorthand resets font-variant, so .num's tabular figures are asked for again: in
+       proportional figures the clock was 60px narrower at 11:11 than at 00:00, and the date beside it
+       moved with every minute. At 54px the widest date in either language, beside the widest time,
+       keeps clear of the card's edge; measured with Inter's figures, which run wider than SF's. */
+    font-variant-numeric: tabular-nums;
     letter-spacing: -2px;
+    font-variation-settings: 'wght' 270;
   }
 
   .slot {
@@ -275,10 +274,12 @@
     opacity: 0.6;
   }
 
+  /* Never two lines: the date gives way instead. */
   .part {
     padding-bottom: 7px;
     font-size: 13px;
     color: var(--muted);
+    white-space: nowrap;
   }
 
   .date {
@@ -299,6 +300,9 @@
   }
 
   .soon {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
     margin-right: -6px;
     padding: 1px 6px;
     border-radius: 6px;
