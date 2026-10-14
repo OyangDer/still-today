@@ -259,6 +259,10 @@
     align-items: center;
     height: 96px;
     font: 300 52px/1 var(--font-display);
+    /* The font shorthand resets font-variant, so .num's tabular figures are asked for again: in
+       proportional figures the row grew and shrank with its digits, and re-centred itself every time
+       a 1 came or went. */
+    font-variant-numeric: tabular-nums;
     font-variation-settings: 'wght' 270;
     letter-spacing: -1px;
     transition: transform var(--t-long) var(--ease-morph);

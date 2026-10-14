@@ -262,11 +262,13 @@
     background: var(--control);
   }
 
+  /* "All day" fills 38 of these 40px in English: it must never fall onto two lines. */
   .time {
     width: 40px;
     flex: none;
     font-size: 12px;
     color: var(--muted);
+    white-space: nowrap;
   }
 
   /* A Canvas item's bar is its course's Canvas colour; the rest keep their kind's. */

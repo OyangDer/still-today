@@ -235,7 +235,7 @@
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
-    gap: 10px;
+    gap: 8px;
     padding: 14px 0 16px;
     border-bottom: 1px solid var(--line);
   }
@@ -243,12 +243,17 @@
   .time {
     display: flex;
     align-items: flex-end;
-    gap: 8px;
+    gap: 6px;
   }
 
   .clock {
     display: flex;
-    font: 300 60px/1 var(--font-display);
+    font: 300 54px/1 var(--font-display);
+    /* The font shorthand resets font-variant, so .num's tabular figures are asked for again: in
+       proportional figures the clock was 60px narrower at 11:11 than at 00:00, and the date beside it
+       moved with every minute. At 54px the widest date in either language, beside the widest time,
+       keeps clear of the card's edge; measured with Inter's figures, which run wider than SF's. */
+    font-variant-numeric: tabular-nums;
     letter-spacing: -2px;
     font-variation-settings: 'wght' 270;
   }
@@ -276,20 +281,29 @@
     white-space: nowrap;
   }
 
+  /* The date gives way before the clock: a string longer than any now shown would end in an ellipsis
+     rather than leave the card. */
   .date {
     display: grid;
+    min-width: 0;
     justify-items: end;
     gap: 3px;
     padding-bottom: 6px;
   }
 
   .day {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-size: 14px;
     font-weight: 650;
     white-space: nowrap;
   }
 
   .soon {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
     margin-right: -6px;
     padding: 1px 6px;
     border-radius: 6px;

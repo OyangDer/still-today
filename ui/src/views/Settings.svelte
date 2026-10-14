@@ -713,6 +713,8 @@
   .hint {
     margin: 0;
     padding: 0 6px;
+    /* A Canvas address has nowhere to break. */
+    overflow-wrap: anywhere;
   }
 
   .connect .hint {

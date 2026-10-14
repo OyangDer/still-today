@@ -212,6 +212,7 @@
     font-weight: 600;
     letter-spacing: 0.2px;
     color: var(--accent);
+    overflow-wrap: anywhere;
   }
 
   h2 {
@@ -220,6 +221,9 @@
     line-height: 1.3;
     font-weight: 650;
     letter-spacing: -0.2px;
+    /* A title with no space to break at, such as one joined with underscores, otherwise runs past the
+       card and opens a sideways scroll. */
+    overflow-wrap: anywhere;
     user-select: text;
   }
 
@@ -428,6 +432,7 @@
 
   .notes {
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
     user-select: text;
   }
 

@@ -58,6 +58,7 @@
     font-weight: 600;
     letter-spacing: 0.2px;
     color: var(--accent);
+    overflow-wrap: anywhere;
   }
 
   .eyebrow .course-dot {
@@ -70,6 +71,9 @@
     line-height: 1.3;
     font-weight: 650;
     letter-spacing: -0.2px;
+    /* A title with no space to break at, such as one joined with underscores, otherwise runs past the
+       card and opens a sideways scroll. */
+    overflow-wrap: anywhere;
     user-select: text;
   }
 
@@ -77,6 +81,7 @@
     margin: 8px 0 0;
     font-size: 12.5px;
     color: var(--muted);
+    overflow-wrap: anywhere;
   }
 
   .message {
