@@ -111,9 +111,9 @@ class Store {
     if (this.mac) document.documentElement.dataset.os = 'mac';
     this.morph = info.morph ?? null;
     const lang: Lang = info.locale.toLowerCase().startsWith('zh') ? 'zh' : 'en';
-    // A save cut short can leave the file unreadable; the one before it then stands in. Only when
-    // there was never a file is this a first run.
-    const saved = readSaved(info.data, lang) ?? readSaved(info.backup, lang);
+    // A save cut short can leave the file unreadable; the one before it then stands in, and failing
+    // that, whatever of the file is still whole. Only when there was never a file is this a first run.
+    const saved = readSaved(info.data, lang) ?? readSaved(info.backup, lang) ?? readSaved(info.data, lang, true);
     // The Canvas host is whatever the stored token belongs to: no token, no host.
     if (saved || info.data !== null) {
       this.data = saved ?? emptyData(lang);
