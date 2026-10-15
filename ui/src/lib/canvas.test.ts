@@ -159,9 +159,13 @@ describe('fetchProfile', () => {
 
   it('returns an uploaded picture, and null for the placeholder or a school without pictures', async () => {
     const url = 'https://canvas.sydney.edu.au/images/thumbnails/10000001/ExampleThumb';
-    expect(await fetchProfile(profile({ id: 7, avatar_url: url }))).toEqual({ id: '7', avatar: url });
-    expect(await fetchProfile(profile({ id: 7, avatar_url: 'https://canvas.sydney.edu.au/images/messages/avatar-50.png' }))).toEqual({ id: '7', avatar: null });
-    expect(await fetchProfile(profile({ id: 7, name: 'Jordan Lee' }))).toEqual({ id: '7', avatar: null });
+    expect(await fetchProfile(profile({ id: 7, avatar_url: url }))).toEqual({ id: '7', name: null, avatar: url });
+    expect(await fetchProfile(profile({ id: 7, avatar_url: 'https://canvas.sydney.edu.au/images/messages/avatar-50.png' }))).toEqual({ id: '7', name: null, avatar: null });
+  });
+
+  it('returns the name, for a token that connected without one', async () => {
+    expect(await fetchProfile(profile({ id: 7, name: ' Jordan Lee ' }))).toEqual({ id: '7', name: 'Jordan Lee', avatar: null });
+    expect(await fetchProfile(profile({ id: 7, name: '' }))).toEqual({ id: '7', name: null, avatar: null });
   });
 
   it('leaves everything alone when Canvas does not answer', async () => {

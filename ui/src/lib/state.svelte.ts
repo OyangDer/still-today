@@ -535,6 +535,8 @@ class Store {
     if (!this.data.canvas.host) return;
     const api = { get: (path: string) => call<HttpReply>('canvas.get', { path }) };
     const [list, profile] = await Promise.all([fetchCourses(api), fetchProfile(api)]);
+    // A token left from before (a first run that finds one, say) connects without the name Connect reads.
+    if (profile) this.data.canvas.user ??= profile.name;
     if (typeof list === 'string') {
       this.data.canvas.error = list;
       return;

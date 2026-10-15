@@ -172,17 +172,17 @@ export async function fetchAssignments(api: CanvasApi, courses: Course[]): Promi
 }
 
 /**
- * The user's id and profile picture URL. The picture is null when they have none (Canvas then
+ * The user's id, name and profile picture URL. The picture is null when they have none (Canvas then
  * answers with its own placeholder, or with nothing where a school turns pictures off); the whole
  * profile is undefined when Canvas did not answer.
  */
-export async function fetchProfile(api: CanvasApi): Promise<{ id: string; avatar: string | null } | undefined> {
+export async function fetchProfile(api: CanvasApi): Promise<{ id: string; name: string | null; avatar: string | null } | undefined> {
   const res = await api.get('/api/v1/users/self/profile');
   if (res.status !== 200 || res.body === null) return undefined;
-  const profile = JSON.parse(res.body) as { id?: number | string; avatar_url?: string | null };
+  const profile = JSON.parse(res.body) as { id?: number | string; name?: string | null; avatar_url?: string | null };
   if (profile.id === undefined) return undefined;
   const url = profile.avatar_url;
-  return { id: String(profile.id), avatar: url && !url.includes('/images/messages/avatar-') ? url : null };
+  return { id: String(profile.id), name: profile.name?.trim() || null, avatar: url && !url.includes('/images/messages/avatar-') ? url : null };
 }
 
 const courseOf = (code: string | undefined) => (code?.startsWith('course_') ? code.slice(7) : null);
