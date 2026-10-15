@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { stepper } from './wheel';
 
 // Recorded in the Mac's WebKit on 2026-10-17 over the calendar's month grid: [ms from the first event, deltaX, deltaY].
@@ -30,11 +30,36 @@ const THREE_SWIPES: Recorded = [
   [1417, 8, -2], [1434, 3, -1], [1450, 2, -1], [1500, 0, -1], [1517, 0, -1], [1534, 0, -1], [1550, 0, -1],
 ];
 
+// The 2026-10-17 swipe up that ran the months to 2032: its first frame was a 4px step, and was taken for a notch.
+const SWIPE_UP_FROM_4: Recorded = [
+  [0, 0, 4], [16, 0, 4], [31, -1, 20], [49, -2, 26], [65, -2, 26], [81, -1, 15], [99, -1, 11], [115, 0, 25], [131, 0, 28], [148, 0, 29], [165, 0, 15],
+  [165, 0, 3], [165, 0, 3], [181, 0, 13], [181, 1, 1], [198, 0, 17], [198, 1, 1], [214, 0, 30], [215, 0, -1], [232, 0, 28], [232, 0, -1], [248, 0, 26],
+  [249, 0, -2], [265, 0, 23], [265, 0, -3], [281, 0, 21], [281, 0, -8], [298, 0, 19], [298, -1, -17], [314, 0, 18],
+];
+// A swipe down and back up whose fingers drifted sideways by a few pixels.
+const WANDERING_UP_DOWN: Recorded = [
+  [0, 0, 1], [16, -1, 5], [33, -3, 13], [50, -2, 9], [66, -1, 6], [83, -1, 4], [100, -1, 3], [116, 0, 1], [133, 0, 1], [200, 0, -1], [216, 0, -1],
+  [233, 0, -1], [250, 0, -2], [266, 0, -4], [283, 0, -6], [300, 1, -8], [316, 1, -7], [333, 0, -5], [350, 0, -4], [366, 0, -3], [383, -1, -4],
+  [390, 0, -5], [406, 0, -5], [423, 0, -5], [439, 0, -5], [456, 0, -5], [473, 0, -5], [490, 0, -5], [506, 0, -5],
+];
+
+/** Plays recorded events on the clock they came in, so a 4px step waits as it would in the page. */
 function play(events: Recorded, options?: Parameters<typeof stepper>[1]): number[] {
-  const steps: number[] = [];
-  const wheel = stepper((way) => steps.push(way), options);
-  for (const [t, deltaX, deltaY] of events) wheel({ timeStamp: 1000 + t, deltaX, deltaY });
-  return steps;
+  vi.useFakeTimers();
+  try {
+    const steps: number[] = [];
+    const wheel = stepper((way) => steps.push(way), options);
+    let now = 0;
+    for (const [t, deltaX, deltaY] of events) {
+      vi.advanceTimersByTime(t - now);
+      now = t;
+      wheel({ timeStamp: 1000 + t, deltaX, deltaY });
+    }
+    vi.advanceTimersByTime(1000);
+    return steps;
+  } finally {
+    vi.useRealTimers();
+  }
 }
 
 describe('wheel steps', () => {
@@ -68,6 +93,17 @@ describe('wheel steps', () => {
     expect(play(SWIPE_LEFT)).toEqual([]);
     expect(play(SWIPE_UP, { axis: 'x' })).toEqual([]);
     expect(play([[0, 4, 0]], { axis: 'x' })).toEqual([1]);
+  });
+
+  it('tells a swipe that starts with a 4px frame from a mouse notch', () => {
+    expect(play(SWIPE_UP_FROM_4, { axis: 'x' })).toEqual([]);
+    // 30 frames, 374px of net travel: once at the start, then once each 40px of the 370 after it, never back.
+    expect(play(SWIPE_UP_FROM_4, { travel: 40 })).toEqual(Array(10).fill(1));
+  });
+
+  it('leaves a swipe the other way alone, however its fingers wander', () => {
+    expect(play(WANDERING_UP_DOWN, { axis: 'x' })).toEqual([]);
+    expect(play(WANDERING_UP_DOWN, { travel: 40 })).toEqual([1, -1]);
   });
 
   it('turns a dial again for each stretch of a swipe, and once a notch', () => {
