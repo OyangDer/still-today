@@ -86,6 +86,15 @@ fn handle(app: &AppHandle, request: &Value) -> Value {
             });
             rx.recv_timeout(Duration::from_secs(5)).unwrap_or(json!({ "error": "timeout" }))
         }
+        // How many of the widget's notifications sit in Notification Center, and a click on one with
+        // the given tag, through the same delegate a real click reaches.
+        Some("notices") => {
+            let (request, (tx, rx)) = (request.clone(), mpsc::channel());
+            let _ = window.run_on_main_thread(move || {
+                let _ = tx.send(notices(&request));
+            });
+            rx.recv_timeout(Duration::from_secs(5)).unwrap_or(json!({ "error": "timeout" }))
+        }
         Some("pill") => {
             let (request, (tx, rx)) = (request.clone(), mpsc::channel());
             let _ = window.with_webview(move |webview| {
@@ -220,6 +229,39 @@ fn material(window: &WebviewWindow, request: &Value) -> Value {
 
 #[cfg(not(target_os = "macos"))]
 fn material(_window: &WebviewWindow, _request: &Value) -> Value {
+    json!({ "error": "mac only" })
+}
+
+#[cfg(target_os = "macos")]
+#[allow(deprecated)]
+fn notices(request: &Value) -> Value {
+    use objc2::msg_send;
+    use objc2::runtime::{AnyClass, AnyObject};
+    use objc2::rc::Retained;
+    use objc2_foundation::{ns_string, NSDictionary, NSString, NSUserNotification, NSUserNotificationCenter};
+    let Some(class) = AnyClass::get(c"NSUserNotificationCenter") else { return json!({ "error": "class" }) };
+    // SAFETY: as in shell::notices::center.
+    let center: Option<Retained<NSUserNotificationCenter>> = unsafe { msg_send![class, defaultUserNotificationCenter] };
+    let Some(center) = center else { return json!({ "error": "no center" }) };
+    let delivered = center.deliveredNotifications().count();
+    let Some(tag) = request["click"].as_str() else { return json!({ "delivered": delivered }) };
+    let notice = NSUserNotification::new();
+    let tag = NSString::from_str(tag);
+    let info = NSDictionary::<NSString, AnyObject>::from_slices(&[ns_string!("tag")], &[&*tag as &AnyObject]);
+    // SAFETY: property-list userInfo; the delegate is the app's own, sent the method it implements.
+    unsafe {
+        notice.setUserInfo(Some(&info));
+        let delegate: *mut AnyObject = msg_send![&*center, delegate];
+        if delegate.is_null() {
+            return json!({ "error": "no delegate", "delivered": delivered });
+        }
+        let _: () = msg_send![delegate, userNotificationCenter: &*center, didActivateNotification: &*notice];
+    }
+    json!({ "delivered": delivered, "clicked": true })
+}
+
+#[cfg(not(target_os = "macos"))]
+fn notices(_request: &Value) -> Value {
     json!({ "error": "mac only" })
 }
 
