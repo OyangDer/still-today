@@ -300,7 +300,9 @@
   }
 
   .soon {
-    max-width: 100%;
+    /* The hover pad hangs 6px past the column (the margin below), so the cap allows for it: held to
+       the column alone, the count lost 6px to the ellipsis whenever it was the longer line. */
+    max-width: calc(100% + 6px);
     overflow: hidden;
     text-overflow: ellipsis;
     margin-right: -6px;
