@@ -116,7 +116,10 @@ pub fn watch_wake(app: &AppHandle) {
     use objc2_app_kit::{NSWorkspace, NSWorkspaceDidWakeNotification};
     use objc2_foundation::{NSNotification, NSOperationQueue};
     let app = app.clone();
-    let block = RcBlock::new(move |_: std::ptr::NonNull<NSNotification>| emit(&app, "wake", Value::Null));
+    let block = RcBlock::new(move |_: std::ptr::NonNull<NSNotification>| {
+        crate::rearm_alarm(&app);
+        emit(&app, "wake", Value::Null);
+    });
     // SAFETY: the name is AppKit's constant, there is no sender to match, and the block runs on the
     // main queue.
     let observer = unsafe {

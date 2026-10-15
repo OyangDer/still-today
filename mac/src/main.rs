@@ -35,9 +35,16 @@ pub struct Host {
     widget: widget::Widget,
     // The focus timer's end is kept here, not in the page: a hidden page throttles its timers, and
     // the chime has to land on the second.
-    alarm: Mutex<Option<JoinHandle<()>>>,
+    alarm: Mutex<Option<Alarm>>,
     // Saves go to the disk one at a time.
     saving: Mutex<()>,
+}
+
+struct Alarm {
+    at: i64,
+    title: Option<String>,
+    body: Option<String>,
+    task: JoinHandle<()>,
 }
 
 impl Host {
@@ -158,21 +165,32 @@ fn chime(_app: &AppHandle) {
 fn set_alarm(app: &AppHandle, host: &Host, at: Option<i64>, title: Option<String>, body: Option<String>) {
     let mut alarm = host.alarm.lock().unwrap();
     if let Some(old) = alarm.take() {
-        old.abort();
+        old.task.abort();
     }
     let Some(at) = at else { return };
     let now = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64);
     let due = Duration::from_millis((at - now).max(0) as u64);
-    let app = app.clone();
-    *alarm = Some(tauri::async_runtime::spawn(async move {
+    let (handle, notice) = (app.clone(), title.clone().map(|title| (title, body.clone().unwrap_or_default())));
+    let task = tauri::async_runtime::spawn(async move {
         tokio::time::sleep(due).await;
-        chime(&app);
-        let hidden = app.get_webview_window("main").is_some_and(|w| !w.is_visible().unwrap_or(false));
-        if let (true, Some(title)) = (hidden, title) {
-            shell::notify(&app, title, body.unwrap_or_default(), "focus".into());
+        chime(&handle);
+        let hidden = handle.get_webview_window("main").is_some_and(|w| !w.is_visible().unwrap_or(false));
+        if let (true, Some((title, body))) = (hidden, notice) {
+            shell::notify(&handle, title, body, "focus".into());
         }
-        emit(&app, "alarm", Value::Null);
-    }));
+        emit(&handle, "alarm", Value::Null);
+    });
+    *alarm = Some(Alarm { at, title, body, task });
+}
+
+/// The alarm sleeps on a clock that stops while the Mac sleeps, so an end that passed meanwhile would
+/// chime as long after waking as the Mac slept. On waking it is set again from the wall clock.
+pub fn rearm_alarm(app: &AppHandle) {
+    let host = app.state::<Host>();
+    let pending = host.alarm.lock().unwrap().as_ref().filter(|a| !a.task.inner().is_finished()).map(|a| (a.at, a.title.clone(), a.body.clone()));
+    if let Some((at, title, body)) = pending {
+        set_alarm(app, &host, Some(at), title, body);
+    }
 }
 
 // Web pages, and email addresses for the mail app. A mail link goes out as the bare address: some
