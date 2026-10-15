@@ -39,19 +39,25 @@
     return new Date(d.getFullYear(), d.getMonth(), d.getDate(), Math.floor(minutes / 60), minutes % 60);
   }
 
+  // The page takes clicks and keys while it slides away, so a double click or a held Enter reached
+  // Save again and made a second event: it saves once.
+  let saved = false;
+
   function save() {
+    if (saved) return;
     if (!title.trim()) {
       error = t('event.required');
       return;
     }
     if (!date) return;
+    if (!allDay && end <= start) {
+      error = t('event.order');
+      return;
+    }
+    saved = true;
     if (allDay) {
       app.saveEvent({ id, title: title.trim(), start: dayKey(date), end: null, allDay: true, location: location.trim() });
     } else {
-      if (end <= start) {
-        error = t('event.order');
-        return;
-      }
       app.saveEvent({
         id,
         title: title.trim(),

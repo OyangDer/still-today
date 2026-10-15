@@ -18,10 +18,19 @@
     else set(hours, Math.round((minutes + delta) / Math.abs(delta)) * Math.abs(delta));
   }
 
+  // One step per wheel notch; a touchpad steps once per notch's worth of travel, as the focus dial
+  // does. Stepping on every event spun the hours on a touchpad, and a sideways swipe (no vertical
+  // travel) counted as down.
+  let wheelDelta = 0;
   function wheel(part: 'h' | 'm', e: WheelEvent) {
     if (disabled) return;
     e.preventDefault();
-    step(part, (e.deltaY < 0 ? 1 : -1) * (part === 'm' ? 5 : 1));
+    if (!e.deltaY) return;
+    if (Math.sign(e.deltaY) !== Math.sign(wheelDelta)) wheelDelta = 0;
+    wheelDelta += e.deltaY;
+    if (Math.abs(wheelDelta) < 40) return;
+    step(part, (wheelDelta < 0 ? 1 : -1) * (part === 'm' ? 5 : 1));
+    wheelDelta = 0;
   }
 
   function keys(part: 'h' | 'm', e: KeyboardEvent) {

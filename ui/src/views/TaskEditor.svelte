@@ -21,12 +21,17 @@
   let time = $state(due && existing?.timed ? due.getHours() * 60 + due.getMinutes() : 23 * 60 + 59);
   let notes = $state(existing?.notes ?? '');
   let error = $state('');
+  // The page takes clicks and keys while it slides away, so a double click or a held Enter reached
+  // Save again and made a second task: it saves once.
+  let saved = false;
 
   function save() {
+    if (saved) return;
     if (!title.trim()) {
       error = t('event.required');
       return;
     }
+    saved = true;
     const at = date ? new Date(date.getFullYear(), date.getMonth(), date.getDate(), timed ? Math.floor(time / 60) : 0, timed ? time % 60 : 0) : null;
     app.saveTask({ id, title: title.trim(), due: at?.toISOString() ?? null, timed: date !== null && timed, notes: notes.trim() });
     app.pop();

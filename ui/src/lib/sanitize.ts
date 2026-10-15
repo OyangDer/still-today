@@ -2,11 +2,13 @@
 // elements, so no script, style, handler or embedded frame can reach a page that talks to the host.
 // Canvas images need the browser session's cookies, so they would only ever render broken: dropped.
 
-const KEEP = new Set(['P', 'BR', 'STRONG', 'B', 'EM', 'I', 'U', 'UL', 'OL', 'LI', 'A', 'BLOCKQUOTE', 'CODE', 'PRE', 'HR', 'SUB', 'SUP', 'TABLE', 'THEAD', 'TBODY', 'TR', 'TD', 'TH', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
+// What is not listed is dropped along with its text, so every tag Canvas's editor puts text in is here,
+// down to a collapsible section (details, summary), a definition list and a table's caption and foot.
+const KEEP = new Set(['P', 'BR', 'STRONG', 'B', 'EM', 'I', 'U', 'UL', 'OL', 'LI', 'A', 'BLOCKQUOTE', 'CODE', 'PRE', 'HR', 'SUB', 'SUP', 'TABLE', 'CAPTION', 'THEAD', 'TBODY', 'TFOOT', 'TR', 'TD', 'TH', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
 // Layout containers become plain blocks: many descriptions put each paragraph in a div, and
 // unwrapping those ran the paragraphs together.
-const BLOCKS = new Set(['DIV', 'SECTION', 'ARTICLE', 'CENTER', 'MAIN', 'HEADER', 'FOOTER', 'FIGURE', 'FIGCAPTION']);
-const UNWRAP = new Set(['SPAN', 'FONT', 'LABEL', 'SMALL', 'BIG', 'MARK', 'ABBR', 'CITE', 'DEL', 'INS', 'S']);
+const BLOCKS = new Set(['DIV', 'SECTION', 'ARTICLE', 'ASIDE', 'CENTER', 'MAIN', 'HEADER', 'FOOTER', 'FIGURE', 'FIGCAPTION', 'DETAILS', 'SUMMARY', 'DL', 'DT', 'DD', 'ADDRESS']);
+const UNWRAP = new Set(['SPAN', 'FONT', 'LABEL', 'SMALL', 'BIG', 'MARK', 'ABBR', 'CITE', 'DEL', 'INS', 'S', 'STRIKE', 'Q', 'DFN', 'KBD', 'SAMP', 'VAR', 'TT', 'TIME', 'DATA', 'BDI', 'BDO', 'NOBR']);
 const HEADINGS = new Set(['H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
 // Blocks that are only a spacer (&nbsp;) in the editor's markup would read as holes here.
 const SPACERS = new Set(['P', 'DIV', 'H4']);

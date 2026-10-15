@@ -159,7 +159,7 @@
               {:else}
                 {@const item = entry.item}
                 {@const m = meta(item)}
-                <div class="row" class:done={item.done} role="button" tabindex="0" onclick={() => app.openTask(item.key)} onkeydown={(e) => e.key === 'Enter' && app.openTask(item.key)}>
+                <div class="row" class:done={item.done} role="button" tabindex="0" onclick={() => app.openTask(item.key)} onkeydown={(e) => e.key === 'Enter' && e.target === e.currentTarget && app.openTask(item.key)}>
                   <Check checked={item.done} label={item.title} onchange={(v) => toggle(item, v)} />
                   <div class="body">
                     <span class="title ellipsis">{item.title}</span>
