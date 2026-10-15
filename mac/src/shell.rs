@@ -140,7 +140,17 @@ pub fn watch_wake(_app: &AppHandle) {}
 
 #[cfg(target_os = "macos")]
 pub fn autostart(app: &AppHandle, on: Option<bool>) -> bool {
+    use std::sync::atomic::{AtomicBool, Ordering};
     use tauri_plugin_autostart::ManagerExt;
+    // The demo shares the login item with the real widget, and its first run turns the switch on: its
+    // switch moves, and the login item stays as the real widget left it.
+    static DEMO: AtomicBool = AtomicBool::new(false);
+    if crate::demo() {
+        if let Some(on) = on {
+            DEMO.store(on, Ordering::Relaxed);
+        }
+        return DEMO.load(Ordering::Relaxed);
+    }
     let launcher = app.autolaunch();
     let result = match on {
         Some(true) => launcher.enable(),
