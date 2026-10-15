@@ -2,7 +2,8 @@
   import { untrack } from 'svelte';
   import { app } from '../lib/state.svelte';
   import { t } from '../lib/i18n';
-  import { parseIso } from '../lib/time';
+  import { taskDue } from '../lib/agenda';
+  import { dayKey } from '../lib/time';
   import { fade } from '../lib/motion';
   import DateField from '../components/DateField.svelte';
   import PageHeader from '../components/PageHeader.svelte';
@@ -13,7 +14,7 @@
 
   // Edits start from a copy; nothing reaches the store until Save.
   const existing = untrack(() => (id ? $state.snapshot(app.data.tasks[id]) : null));
-  const due = parseIso(existing?.due);
+  const due = existing ? taskDue(existing) : null;
 
   let title = $state(existing?.title ?? '');
   let date = $state<Date | null>(due);
@@ -32,8 +33,9 @@
       return;
     }
     saved = true;
-    const at = date ? new Date(date.getFullYear(), date.getMonth(), date.getDate(), timed ? Math.floor(time / 60) : 0, timed ? time % 60 : 0) : null;
-    app.saveTask({ id, title: title.trim(), due: at?.toISOString() ?? null, timed: date !== null && timed, notes: notes.trim() });
+    // A time makes it an instant; without one it is due on the day, wherever the clock is later set.
+    const stored = date && (timed ? new Date(date.getFullYear(), date.getMonth(), date.getDate(), Math.floor(time / 60), time % 60).toISOString() : dayKey(date));
+    app.saveTask({ id, title: title.trim(), due: stored, timed: date !== null && timed, notes: notes.trim() });
     app.pop();
   }
 

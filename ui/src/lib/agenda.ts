@@ -36,6 +36,19 @@ export interface Occurrence {
   feedId?: string;
 }
 
+/**
+ * When a personal task is due. One without a time is due on a day, kept as a day key so it stays that
+ * day wherever the computer's clock is set. Older saves kept the day's local midnight as an instant,
+ * which read a day early once the clock moved west (Sydney to Shanghai, say): it is read as the nearest
+ * local midnight, so a move of up to 12 hours keeps the day.
+ */
+export function taskDue(t: Pick<Task, 'due' | 'timed'>): Date | null {
+  if (t.timed || !t.due) return parseIso(t.due);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t.due)) return fromDayKey(t.due);
+  const at = parseIso(t.due);
+  return at && startOfDay(new Date(at.getTime() + 12 * 3600e3));
+}
+
 export function todos(data: Data): TodoItem[] {
   const out: TodoItem[] = [];
   for (const a of Object.values(data.assignments)) {
@@ -55,7 +68,7 @@ export function todos(data: Data): TodoItem[] {
     });
   }
   for (const t of Object.values(data.tasks)) {
-    const due = parseIso(t.due);
+    const due = taskDue(t);
     out.push({
       key: `t:${t.id}`,
       kind: 'local',

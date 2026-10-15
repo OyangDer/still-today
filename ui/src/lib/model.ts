@@ -98,7 +98,7 @@ export interface Assignment {
 export interface Task {
   id: string;
   title: string;
-  /** ISO instant; when `timed` is false only its local day matters. */
+  /** An ISO instant when timed; without a time a day key (older saves: that day's local midnight as an instant). Read through taskDue(). */
   due: string | null;
   timed: boolean;
   notes: string;
