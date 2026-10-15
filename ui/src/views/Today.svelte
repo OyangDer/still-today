@@ -4,6 +4,7 @@
   import { dayPart, dueLabel, shortDate, t } from '../lib/i18n';
   import { hhmm } from '../lib/time';
   import { easeIn, easeMorph, fade, isReduced, move } from '../lib/motion';
+  import { stepper } from '../lib/wheel';
 
   const now = $derived(app.now);
   const digits = $derived(hhmm(now).replace(':', '').split(''));
@@ -23,12 +24,10 @@
     direction = $state(1);
     hover = $state(false);
     el = $state<HTMLElement>();
-    #delta = 0;
-    #last = 0;
-    #seen = 0;
-    #way = 0;
-    #nudged = false;
     #away = 0;
+    // A page per wheel notch or touchpad swipe, either way (lib/wheel.ts). A swipe turns once, so running
+    // past an end nudges the row once rather than for every page's worth of its momentum.
+    #turn = stepper((way) => this.go(this.at + way), { sideways: true });
 
     readonly count: () => number;
 
@@ -58,29 +57,7 @@
     wheel = (e: WheelEvent) => {
       if (this.count() < 2) return;
       e.preventDefault();
-      const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-      // A swipe's momentum keeps the wheel turning after the finger lifts, so events without a pause
-      // between them are one gesture, and it nudges at an end once rather than every page's worth.
-      if (e.timeStamp - this.#seen > 200) this.#nudged = false;
-      this.#seen = e.timeStamp;
-      if (!delta) return;
-      if (Math.sign(delta) !== this.#way) {
-        this.#way = Math.sign(delta);
-        this.#nudged = false;
-      }
-      if (Math.sign(delta) !== Math.sign(this.#delta)) this.#delta = 0;
-      this.#delta += delta;
-      // One page per notch; a touchpad pages every notch's worth of travel, but no faster than the
-      // slide can be read.
-      if (Math.abs(this.#delta) < 40 || e.timeStamp - this.#last < 110) return;
-      this.#last = e.timeStamp;
-      const to = this.at + Math.sign(this.#delta);
-      this.#delta = 0;
-      if (to < 0 || to >= this.count()) {
-        if (this.#nudged) return;
-        this.#nudged = true;
-      }
-      this.go(to);
+      this.#turn(e);
     };
 
     key = (e: KeyboardEvent) => {

@@ -5,6 +5,7 @@
   import { dueLabel, monthDay, monthTitle, t, weekdayLong } from '../lib/i18n';
   import { addMonths, dayKey, hhmm, monthGrid, startOfDay } from '../lib/time';
   import { easeOut, fade, move } from '../lib/motion';
+  import { stepper } from '../lib/wheel';
   import Icon from '../components/Icon.svelte';
   import MonthGrid from '../components/MonthGrid.svelte';
 
@@ -40,20 +41,11 @@
     month = addMonths(month, n);
   }
 
-  // One month per wheel notch. A touchpad sends a stream of small steps, each of which turned a month,
-  // so one swipe ran through a year or more: it turns one per notch's worth of travel, no faster than
-  // the slide can be read, as the overview's rows page.
-  let wheelDelta = 0;
-  let wheeledAt = 0;
+  // A month per wheel notch or touchpad swipe, up and down or sideways, as the months slide (lib/wheel.ts).
+  const turn = stepper(shift, { sideways: true });
   function wheel(e: WheelEvent) {
-    if (!e.deltaY) return;
     e.preventDefault();
-    if (Math.sign(e.deltaY) !== Math.sign(wheelDelta)) wheelDelta = 0;
-    wheelDelta += e.deltaY;
-    if (Math.abs(wheelDelta) < 40 || e.timeStamp - wheeledAt < 110) return;
-    wheeledAt = e.timeStamp;
-    shift(Math.sign(wheelDelta));
-    wheelDelta = 0;
+    turn(e);
   }
 
   function time(o: Occurrence): string {
