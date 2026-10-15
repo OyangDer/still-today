@@ -18,10 +18,11 @@ type Wheel = Pick<WheelEvent, 'deltaX' | 'deltaY' | 'timeStamp'>;
 
 /**
  * Calls `step` once for each notch and each swipe, with the way it turns (1 down or left, -1 up or
- * right): a pager. With `travel`, a swipe steps again for every `travel` px it goes on: a dial.
- * Sideways swipes turn it only with `sideways`; otherwise they are left alone.
+ * right): a pager. With `travel`, a swipe steps again for every `travel` px it goes on: a dial. It
+ * turns one way only: `x` for swipes sideways (and Shift with a mouse wheel), `y` for up and down;
+ * movement the other way is left alone.
  */
-export function stepper(step: (way: 1 | -1) => void, { travel = 0, sideways = false } = {}): (e: Wheel) => void {
+export function stepper(step: (way: 1 | -1) => void, { travel = 0, axis = 'y' }: { travel?: number; axis?: 'x' | 'y' } = {}): (e: Wheel) => void {
   let last = -Infinity;
   let moved = 0;
   // The swipe under way: its direction (0 before it counts), its fastest frame, its slowest since.
@@ -36,7 +37,7 @@ export function stepper(step: (way: 1 | -1) => void, { travel = 0, sideways = fa
   };
   return (e) => {
     const across = Math.abs(e.deltaX) > Math.abs(e.deltaY);
-    const delta = across ? (sideways ? e.deltaX : 0) : e.deltaY;
+    const delta = across === (axis === 'x') ? (across ? e.deltaX : e.deltaY) : 0;
     if (e.timeStamp - last > PAUSE) reset();
     last = e.timeStamp;
     if (!delta) return;

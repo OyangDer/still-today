@@ -41,8 +41,8 @@
     month = addMonths(month, n);
   }
 
-  // A month per wheel notch or touchpad swipe, up and down or sideways, as the months slide (lib/wheel.ts).
-  const turn = stepper(shift, { sideways: true });
+  // A month per sideways swipe, the way the months slide (lib/wheel.ts); up and down is left alone.
+  const turn = stepper(shift, { axis: 'x' });
   function wheel(e: WheelEvent) {
     e.preventDefault();
     turn(e);
