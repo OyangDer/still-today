@@ -123,7 +123,7 @@
               role={opens(o) ? 'button' : undefined}
               tabindex={opens(o) ? 0 : undefined}
               onclick={() => open(o)}
-              onkeydown={(e) => e.key === 'Enter' && open(o)}
+              onkeydown={(e) => e.key === 'Enter' && e.target === e.currentTarget && open(o)}
               out:move={{ x: 24, duration: 200 }}
             >
               <span class="time num">{time(o)}</span>
