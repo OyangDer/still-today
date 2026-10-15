@@ -44,21 +44,23 @@ describe('wheel steps', () => {
 
   it('turns one page for a swipe, however far its momentum carries it', () => {
     expect(play(SWIPE_UP)).toEqual([1]);
-    expect(play(SWIPE_UP, { sideways: true })).toEqual([1]);
-    expect(play(SWIPE_LEFT, { sideways: true })).toEqual([1]);
+    expect(play(SWIPE_LEFT, { axis: 'x' })).toEqual([1]);
   });
 
   it('turns a page for each swipe of a quick run, though their momentum runs together', () => {
-    expect(play(THREE_SWIPES, { sideways: true })).toEqual([1, 1, 1]);
+    expect(play(THREE_SWIPES, { axis: 'x' })).toEqual([1, 1, 1]);
   });
 
   it('turns back for a swipe back', () => {
     const back = SWIPE_LEFT.slice(0, 12).concat(SWIPE_LEFT.slice(0, 12).map(([t, dx, dy]) => [t + 240, -dx, dy] as [number, number, number]));
-    expect(play(back, { sideways: true })).toEqual([1, -1]);
+    expect(play(back, { axis: 'x' })).toEqual([1, -1]);
   });
 
-  it('leaves a sideways swipe to a control that only turns up and down', () => {
+  it('turns only the way it is set to', () => {
     expect(play(SWIPE_LEFT)).toEqual([]);
+    expect(play(SWIPE_UP, { axis: 'x' })).toEqual([]);
+    expect(play(NOTCH, { axis: 'x' })).toEqual([]);
+    expect(play([[0, 4, 0]], { axis: 'x' })).toEqual([1]);
   });
 
   it('turns a dial again for each stretch of a swipe', () => {
