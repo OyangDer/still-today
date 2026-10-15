@@ -25,9 +25,9 @@
     hover = $state(false);
     el = $state<HTMLElement>();
     #away = 0;
-    // A page per sideways swipe, the way the row slides (lib/wheel.ts); up and down is left alone. A swipe
-    // turns once, so running past an end nudges the row once rather than for every page's worth of its
-    // momentum.
+    // A page per mouse notch, or per touchpad swipe sideways, the way the row slides (lib/wheel.ts). A
+    // swipe turns once, so running past an end nudges the row once rather than for every page's worth of
+    // its momentum.
     #turn = stepper((way) => this.go(this.at + way), { axis: 'x' });
 
     readonly count: () => number;
