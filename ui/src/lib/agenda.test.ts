@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bucketOf, coursesOf, dayAgenda, monthMarks, todos, upcomingDeadlines, upcomingEvents } from './agenda';
+import { bucketOf, coursesOf, dayAgenda, monthMarks, taskDue, todos, upcomingDeadlines, upcomingEvents } from './agenda';
 import { emptyData, type Assignment } from './model';
 import { monthGrid } from './time';
 
@@ -78,5 +78,28 @@ describe('agenda', () => {
     expect(['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01'].map((k) => marks.get(k)?.events ?? 0)).toEqual([1, 1, 1, 0]);
     expect(marks.get('2026-09-25')?.deadlines).toBe(2);
     expect(dayAgenda(data(), new Date(2026, 8, 29)).map((o) => o.title)).toEqual(['Break']);
+  });
+});
+
+describe('a personal task without a time', () => {
+  const day = (d: Date | null) => d && [d.getFullYear(), d.getMonth() + 1, d.getDate()];
+
+  it('is due on the day it was given, wherever the clock is set', () => {
+    expect(day(taskDue({ due: '2026-10-18', timed: false }))).toEqual([2026, 10, 18]);
+    expect(taskDue({ due: '2026-10-18', timed: false })!.getHours()).toBe(0);
+  });
+
+  it('keeps the day of an older save made under a clock up to 12 hours away', () => {
+    // The tests run in Sydney. 18 October at midnight in Shanghai, London and Auckland, as older saves kept it.
+    expect(day(taskDue({ due: '2026-10-17T16:00:00.000Z', timed: false }))).toEqual([2026, 10, 18]);
+    expect(day(taskDue({ due: '2026-10-17T23:00:00.000Z', timed: false }))).toEqual([2026, 10, 18]);
+    expect(day(taskDue({ due: '2026-10-17T11:00:00.000Z', timed: false }))).toEqual([2026, 10, 18]);
+    // And one made here.
+    expect(day(taskDue({ due: new Date(2026, 9, 18).toISOString(), timed: false }))).toEqual([2026, 10, 18]);
+  });
+
+  it('leaves a timed task at its instant', () => {
+    expect(taskDue({ due: '2026-10-17T22:00:00.000Z', timed: true })!.toISOString()).toBe('2026-10-17T22:00:00.000Z');
+    expect(taskDue({ due: null, timed: false })).toBeNull();
   });
 });

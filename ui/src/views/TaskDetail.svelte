@@ -1,7 +1,7 @@
 <script lang="ts">
   import { slide } from 'svelte/transition';
   import { app } from '../lib/state.svelte';
-  import { focusSeconds } from '../lib/agenda';
+  import { focusSeconds, taskDue } from '../lib/agenda';
   import { gradeText } from '../lib/canvas';
   import { dueLabel, duration, monthDay, t, weekdayShort } from '../lib/i18n';
   import { hasText } from '../lib/sanitize';
@@ -18,7 +18,7 @@
   const task = $derived(key.startsWith('t:') ? app.data.tasks[key.slice(2)] : null);
   const title = $derived(assignment?.title ?? task?.title ?? '');
   const done = $derived(assignment?.done ?? task?.done ?? false);
-  const due = $derived(parseIso(assignment?.due ?? task?.due));
+  const due = $derived(assignment ? parseIso(assignment.due) : task ? taskDue(task) : null);
   const timed = $derived(task ? task.timed : true);
   const focused = $derived(focusSeconds(app.data, key));
   const sessions = $derived(app.data.focus.filter((s) => s.task === key).sort((a, b) => b.start.localeCompare(a.start)));
