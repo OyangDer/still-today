@@ -248,12 +248,11 @@
 
   .clock {
     display: flex;
-    font: 300 54px/1 var(--font-display);
-    /* The font shorthand resets font-variant, so .num's tabular figures are asked for again: in
-       proportional figures the clock was 60px narrower at 11:11 than at 00:00, and the date beside it
-       moved with every minute. At 54px the widest date in either language, beside the widest time,
-       keeps clear of the card's edge; measured with Inter's figures, which run wider than SF's. */
-    font-variant-numeric: tabular-nums;
+    font: 300 60px/1 var(--font-display);
+    /* Proportional figures, on purpose (the shorthand drops .num's tabular ones). Tabular, every time
+       is as wide as the widest, 163px in Inter, and a long English date no longer fits beside it.
+       Proportional, the widest time (04:44, 148px) still leaves the widest date (Wednesday, May 28)
+       half a pixel, and the narrower gaps above pay for that. */
     letter-spacing: -2px;
     font-variation-settings: 'wght' 270;
   }
