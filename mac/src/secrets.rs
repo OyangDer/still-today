@@ -18,9 +18,14 @@ pub fn feed(id: &str) -> String {
 // on every read, and a launch reads the token several times: kept here, it asks once.
 static KNOWN: LazyLock<Mutex<HashMap<String, Option<String>>>> = LazyLock::new(Default::default);
 
+// The demo shares the Keychain item with the real widget, so it never touches the Keychain: what it
+// stores lives only in this run, and disconnecting it leaves the real token where it is.
 pub fn read(account: &str) -> Result<Option<String>, String> {
     if let Some(known) = KNOWN.lock().unwrap().get(account) {
         return Ok(known.clone());
+    }
+    if crate::demo() {
+        return Ok(None);
     }
     let secret = match Entry::new(SERVICE, account).and_then(|e| e.get_password()) {
         Ok(secret) => Some(secret),
@@ -32,13 +37,18 @@ pub fn read(account: &str) -> Result<Option<String>, String> {
 }
 
 pub fn write(account: &str, secret: &str) -> Result<(), String> {
-    Entry::new(SERVICE, account).and_then(|e| e.set_password(secret)).map_err(|_| "secret")?;
+    if !crate::demo() {
+        Entry::new(SERVICE, account).and_then(|e| e.set_password(secret)).map_err(|_| "secret")?;
+    }
     KNOWN.lock().unwrap().insert(account.into(), Some(secret.into()));
     Ok(())
 }
 
 pub fn delete(account: &str) {
     KNOWN.lock().unwrap().remove(account);
+    if crate::demo() {
+        return;
+    }
     if let Ok(entry) = Entry::new(SERVICE, account) {
         let _ = entry.delete_credential();
     }
