@@ -169,7 +169,11 @@ class Store {
 
   /** Minute ticks normally; second ticks while a visible focus timer runs. */
   tick = (): void => {
+    const before = this.now;
     this.now = new Date();
+    // The calendar left on today moves on to the new day at midnight (or on waking past it); a day
+    // the user picked stays picked.
+    if (dayKey(this.now) !== dayKey(before) && dayKey(this.calendarDay) === dayKey(before)) this.calendarDay = this.now;
     const timer = this.data.timer;
     if (timer?.endsAt && Date.now() >= timer.endsAt) this.completeTimer();
     clearTimeout(this.clockTimer);
