@@ -207,7 +207,12 @@ internal sealed class Bridge
     {
         var token = Secrets.Read(CanvasTarget, out var host);
         if (token == null) return new Dictionary<string, object> { ["status"] = 401 };
-        var hint = token.Substring(token.IndexOf('~') + 1, 5);
+        // The token names itself by its first five characters after the "~". One with fewer
+        // cannot be asked about; "not found" leaves the sync to its other sources, where an
+        // exception here failed the whole pass.
+        var at = token.IndexOf('~') + 1;
+        if (token.Length - at < 5) return new Dictionary<string, object> { ["status"] = 404 };
+        var hint = token.Substring(at, 5);
         return Result(await Http.CanvasGet(new Uri(new Uri("https://" + host), "/api/v1/users/self/tokens/" + Uri.EscapeDataString(hint)), token));
     }
 

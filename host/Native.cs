@@ -90,6 +90,18 @@ internal static class Native
     [DllImport("user32.dll")]
     public static extern IntPtr RegisterPowerSettingNotification(IntPtr recipient, ref Guid setting, int flags);
 
+    public const uint EVENT_SYSTEM_MINIMIZEEND = 0x0017;
+    public const uint WINEVENT_OUTOFCONTEXT = 0x0000, WINEVENT_SKIPOWNPROCESS = 0x0002;
+    public const int OBJID_WINDOW = 0;
+
+    public delegate void WinEventProc(IntPtr hook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint thread, uint time);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr module, WinEventProc proc, uint processId, uint threadId, uint flags);
+
+    [DllImport("user32.dll")]
+    public static extern bool UnhookWinEvent(IntPtr hook);
+
     /// <summary>Windows 11's energy saver: 0 off, 1 standard, 2 high savings.</summary>
     public static readonly Guid GUID_ENERGY_SAVER_STATUS = new("550e8400-e29b-41d4-a716-446655440000");
     /// <summary>Windows 10's battery saver: 0 off, 1 on.</summary>
