@@ -417,6 +417,9 @@ class Store {
         },
       });
     } else if (key.startsWith('f:') || key.startsWith('c:')) {
+      // The row's button still takes a second click while the row slides out. Hidden twice, the key
+      // was listed twice, and Settings, which lists the hidden by key, failed to draw.
+      if (this.data.hiddenEvents.includes(key)) return;
       this.data.hiddenEvents.push(key);
       this.notify(
         t('cal.hidden'),
