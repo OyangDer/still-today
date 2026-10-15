@@ -4,6 +4,7 @@
   import { dueLabel, duration, t } from '../lib/i18n';
   import { startOfDay } from '../lib/time';
   import { easeIn, easeMorph, easeOut, fade, move } from '../lib/motion';
+  import { stepper } from '../lib/wheel';
   import CourseFilter from '../components/CourseFilter.svelte';
   import Icon from '../components/Icon.svelte';
 
@@ -21,7 +22,6 @@
   const ROLL = 260;
   let steppedAt = 0;
   let instant = $state(false);
-  let wheelDelta = 0;
   let task = $state<string | null>(app.focusTarget);
   let picking = $state(false);
 
@@ -75,14 +75,12 @@
     seconds = next;
   }
 
-  // One step per wheel notch; a touchpad steps once per notch's worth of travel.
+  // A step per wheel notch, and per 40px of a touchpad swipe (lib/wheel.ts); scrolling up counts up.
+  const wheels = UNITS.map((unit) => stepper((way) => setSeconds(seconds - way * unit), { travel: 40 }));
   function wheel(e: WheelEvent, unit: number) {
     if (phase !== 'idle') return;
     e.preventDefault();
-    wheelDelta += e.deltaY;
-    if (Math.abs(wheelDelta) < 40) return;
-    setSeconds(seconds - Math.sign(wheelDelta) * unit);
-    wheelDelta = 0;
+    wheels[UNITS.indexOf(unit)](e);
   }
 
   function drag(e: PointerEvent, unit: number) {

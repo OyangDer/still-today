@@ -1,6 +1,7 @@
 <script lang="ts">
   import { t } from '../lib/i18n';
   import Icon from './Icon.svelte';
+  import { stepper } from '../lib/wheel';
 
   // Minutes since midnight. Each half responds to typing, the wheel and the arrow keys.
   let { value = $bindable(), disabled = false }: { value: number; disabled?: boolean } = $props();
@@ -18,19 +19,16 @@
     else set(hours, Math.round((minutes + delta) / Math.abs(delta)) * Math.abs(delta));
   }
 
-  // One step per wheel notch; a touchpad steps once per notch's worth of travel, as the focus dial
-  // does. Stepping on every event spun the hours on a touchpad, and a sideways swipe (no vertical
-  // travel) counted as down.
-  let wheelDelta = 0;
+  // A step per wheel notch, and per 40px of a touchpad swipe, as the focus dial turns (lib/wheel.ts).
+  // Scrolling up counts up.
+  const wheels = {
+    h: stepper((way) => step('h', -way), { travel: 40 }),
+    m: stepper((way) => step('m', -way * 5), { travel: 40 }),
+  };
   function wheel(part: 'h' | 'm', e: WheelEvent) {
     if (disabled) return;
     e.preventDefault();
-    if (!e.deltaY) return;
-    if (Math.sign(e.deltaY) !== Math.sign(wheelDelta)) wheelDelta = 0;
-    wheelDelta += e.deltaY;
-    if (Math.abs(wheelDelta) < 40) return;
-    step(part, (wheelDelta < 0 ? 1 : -1) * (part === 'm' ? 5 : 1));
-    wheelDelta = 0;
+    wheels[part](e);
   }
 
   function keys(part: 'h' | 'm', e: KeyboardEvent) {
