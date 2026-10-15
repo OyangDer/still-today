@@ -208,18 +208,56 @@ export function emptyData(lang: Lang): Data {
   };
 }
 
-/** Fills fields added after a file was written, so older saves keep loading. */
+const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+/** A saved object, or an empty one in place of anything else. */
+const record = <T>(v: unknown): Record<string, T> => (isRecord(v) ? (v as Record<string, T>) : {});
+/** A saved list of objects, or an empty one, without the holes (nulls) a damaged file can have. */
+const list = <T>(v: unknown): T[] => (Array.isArray(v) ? (v.filter(isRecord) as T[]) : []);
+/** A saved map of objects (tasks, events, assignments), without the holes. */
+const entries = <T>(v: unknown): Record<string, T> =>
+  Object.fromEntries(Object.entries(record(v)).filter(([, item]) => isRecord(item))) as Record<string, T>;
+
+/** A timer that can run: anything less (a hand-edited file, say) showed NaN:NaN and kept a NaN session. */
+function timer(v: unknown): TimerState | null {
+  if (!isRecord(v)) return null;
+  const t = v as Partial<TimerState>;
+  const runs = Number.isFinite(t.duration) && Number.isFinite(t.remaining) && typeof t.startedAt === 'string' && (t.endsAt === null || Number.isFinite(t.endsAt));
+  return runs ? (t as TimerState) : null;
+}
+
+/**
+ * Fills fields added after a file was written, so older saves keep loading. What readSaved lets through
+ * from a damaged file (a setting of the wrong kind, a hole in a list) falls back to its empty value: a
+ * null list left the widget blank at every start, and a language other than zh or en stopped it
+ * starting at all.
+ */
 export function normalize(raw: Partial<Data>, lang: Lang): Data {
   const base = emptyData(lang);
+  const settings = { ...base.settings, ...appearance(record(raw.settings)) };
+  const canvas = { ...base.canvas, ...record(raw.canvas) };
+  const seconds = settings.focusSeconds;
   return {
     ...base,
     ...raw,
     v: 1,
-    settings: { ...base.settings, ...appearance(raw.settings) },
-    focus: (raw.focus ?? base.focus).filter((s) => s.seconds >= MIN_FOCUS_SECONDS),
-    canvas: { ...base.canvas, ...raw.canvas },
-    hiddenEvents: padHiddenKeys(raw.hiddenEvents ?? base.hiddenEvents),
-    feedEvents: padFeedKeys(raw.feedEvents ?? base.feedEvents),
+    settings: {
+      ...settings,
+      lang: settings.lang === 'zh' || settings.lang === 'en' ? settings.lang : lang,
+      focusSeconds: Number.isFinite(seconds) && seconds >= 1 && seconds <= 10 * 3600 ? seconds : base.settings.focusSeconds,
+      courseNames: record(settings.courseNames),
+      hiddenCourses: Array.isArray(settings.hiddenCourses) ? settings.hiddenCourses.filter((id) => typeof id === 'string') : [],
+    },
+    canvas: { ...canvas, colors: record(canvas.colors), courses: record(canvas.courses) },
+    feeds: list(raw.feeds),
+    assignments: entries(raw.assignments),
+    tasks: entries(raw.tasks),
+    events: entries(raw.events),
+    canvasEvents: list(raw.canvasEvents),
+    announcements: list(raw.announcements),
+    focus: list<FocusSession>(raw.focus).filter((s) => s.seconds >= MIN_FOCUS_SECONDS),
+    timer: timer(raw.timer),
+    hiddenEvents: padHiddenKeys(raw.hiddenEvents),
+    feedEvents: padFeedKeys(raw.feedEvents),
   };
 }
 
@@ -257,7 +295,7 @@ function padFeedKeys(feeds: unknown): Record<string, FeedEvent[]> {
   const out: Record<string, FeedEvent[]> = {};
   for (const [id, events] of Object.entries(feeds as Record<string, unknown>)) {
     if (!Array.isArray(events)) continue;
-    out[id] = (events as FeedEvent[]).map((e) => {
+    out[id] = (events.filter(isRecord) as unknown as FeedEvent[]).map((e) => {
       if (typeof e?.key !== 'string') return e;
       const padded = paddedKeys(`f:${id}:${e.key}`);
       if (!padded.length) return e;
@@ -282,12 +320,26 @@ function appearance(saved: Partial<Settings> & { theme?: Theme } = {}): Partial<
   return theme && rest.aura === undefined ? { ...THEMES[theme], ...rest } : rest;
 }
 
-/** A saved file's data, or null when it cannot be read as one (cut short, emptied, damaged). */
-export function readSaved(text: string | null, lang: Lang): Data | null {
+/** Whether every list and map of the user's things is whole: one that is not sends the page to the backup. */
+function intact(raw: Record<string, unknown>): boolean {
+  const whole = (v: unknown) => Array.isArray(v) && v.every(isRecord);
+  const lists = ['feeds', 'canvasEvents', 'announcements', 'focus'].every((key) => raw[key] === undefined || whole(raw[key]));
+  const maps = ['assignments', 'tasks', 'events'].every((key) => raw[key] === undefined || (isRecord(raw[key]) && Object.values(raw[key]).every(isRecord)));
+  const feeds = raw.feedEvents === undefined || (isRecord(raw.feedEvents) && Object.values(raw.feedEvents).every(whole));
+  const parts = [raw.settings, raw.canvas].every((v) => v === undefined || isRecord(v)) && (raw.timer == null || isRecord(raw.timer));
+  return lists && maps && feeds && parts && (raw.hiddenEvents === undefined || Array.isArray(raw.hiddenEvents));
+}
+
+/**
+ * A saved file's data, or null when it cannot be read as one (cut short, emptied, damaged). With
+ * `salvage`, a damaged file gives whatever of it is still whole: the last resort, when the backup is
+ * no better, in place of starting empty and saving that over it.
+ */
+export function readSaved(text: string | null, lang: Lang, salvage = false): Data | null {
   if (!text) return null;
   try {
     const raw: unknown = JSON.parse(text);
-    return raw && typeof raw === 'object' && !Array.isArray(raw) ? normalize(raw as Partial<Data>, lang) : null;
+    return isRecord(raw) && (salvage || intact(raw)) ? normalize(raw as Partial<Data>, lang) : null;
   } catch {
     return null;
   }
