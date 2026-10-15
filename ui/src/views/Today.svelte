@@ -1,7 +1,7 @@
 <script lang="ts">
   import { app } from '../lib/state.svelte';
   import { bucketOf, todos, upcomingDeadlines, upcomingEvents, type Occurrence, type TodoItem } from '../lib/agenda';
-  import { dayPart, dueLabel, longDate, t } from '../lib/i18n';
+  import { dayPart, dueLabel, shortDate, t } from '../lib/i18n';
   import { hhmm } from '../lib/time';
   import { easeIn, easeMorph, fade, isReduced, move } from '../lib/motion';
 
@@ -164,7 +164,7 @@
       <span class="part">{dayPart(now)}</span>
     </div>
     <div class="date">
-      <span class="day">{longDate(now)}</span>
+      <span class="day">{shortDate(now)}</span>
       <button class="soon" onclick={openSoon}>
         {#if soon}{soonWords[0]}<b class="num">{soon}</b>{soonWords[1]}{:else}{t('today.soonNone')}{/if}
       </button>
@@ -250,9 +250,9 @@
     display: flex;
     font: 300 60px/1 var(--font-display);
     /* Proportional figures, on purpose (the shorthand drops .num's tabular ones). Tabular, every time
-       is as wide as the widest, 163px in Inter, and a long English date no longer fits beside it.
-       Proportional, the widest time (04:44, 148px) still leaves the widest date (Wednesday, May 28)
-       half a pixel, and the narrower gaps above pay for that. */
+       is as wide as the widest, 163px in Inter. Proportional, at every minute the date column keeps
+       room for its longest lines, "Wed, May 20" and "None due in 7 days": 50px and 18px to spare in
+       Inter, 34px and 2px on the Mac's narrower card in SF. */
     letter-spacing: -2px;
     font-variation-settings: 'wght' 270;
   }

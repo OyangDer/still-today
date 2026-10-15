@@ -272,8 +272,8 @@ const en: Record<Key, string> = {
   'today.focusing': 'Focusing',
   'today.connect': 'Connect Canvas',
   'today.updated': '{n} updated',
-  'today.soon': '{n} due within 7 days',
-  'today.soonNone': 'Nothing due in 7 days',
+  'today.soon': '{n} due in 7 days',
+  'today.soonNone': 'None due in 7 days',
   'token.soon': 'Token expires in {n} days',
   'token.today': 'Token expires today',
   'token.expired': 'Token has expired',
@@ -543,9 +543,9 @@ export function monthDay(d: Date): string {
   return lang === 'zh' ? `${d.getMonth() + 1}月${d.getDate()}日` : `${MONTHS_EN[d.getMonth()]} ${d.getDate()}`;
 }
 
-/** "9月24日，星期四" / "Thursday, Sep 24". */
-export function longDate(d: Date): string {
-  return lang === 'zh' ? `${monthDay(d)}，${weekdayLong(d)}` : `${weekdayLong(d)}, ${monthDay(d)}`;
+/** "9月24日 周四" / "Thu, Sep 24": short enough to sit beside the Overview clock at any hour. */
+export function shortDate(d: Date): string {
+  return lang === 'zh' ? `${monthDay(d)} ${weekdayShort(d)}` : `${weekdayShort(d)}, ${monthDay(d)}`;
 }
 
 /** The part of the day beside the 24-hour clock: 上午/下午/晚上, or am/pm. */
