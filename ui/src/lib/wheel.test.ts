@@ -6,6 +6,8 @@ type Recorded = [number, number, number][];
 const NOTCH: Recorded = [[0, 0, 4]];
 const SLOW_NOTCHES: Recorded = [[0, 0, -4], [157, 0, -4], [390, 0, -4], [582, 0, -4]];
 const FAST_NOTCHES: Recorded = [[0, 0, -4], [105, 0, -9.25], [217, 0, -23.1], [310, 0, -37.13]];
+// A mouse wheel spun hard: seven notches, each faster than the last, with no pause between them.
+const SPIN: Recorded = [[0, 0, -4], [44, 0, -31.58], [77, 0, -116.89], [113, 0, -174.23], [150, 0, -220.24], [180, 0, -244.52], [244, 0, -255.77]];
 const SWIPE_UP: Recorded = [
   [0, 0, 1], [16, 1, 3], [32, 1, 7], [47, 1, 8], [66, -1, 8], [83, -1, 8], [99, -1, 6], [114, -1, 6], [132, -1, 4], [148, -1, 3], [164, 0, 2],
   [181, -1, 1], [199, -1, 1], [215, -1, 0], [232, -1, 0], [264, -1, 0], [282, -1, 0], [297, -1, -1], [314, -1, -1], [331, -1, -1], [347, -1, -1],
@@ -36,10 +38,16 @@ function play(events: Recorded, options?: Parameters<typeof stepper>[1]): number
 }
 
 describe('wheel steps', () => {
-  it('turns a page for each notch of a mouse wheel, slow or fast', () => {
+  it('turns a step for each notch of a mouse wheel, slow, fast or spun', () => {
     expect(play(NOTCH)).toEqual([1]);
     expect(play(SLOW_NOTCHES)).toEqual([-1, -1, -1, -1]);
     expect(play(FAST_NOTCHES)).toEqual([-1, -1, -1, -1]);
+    expect(play(SPIN)).toEqual([-1, -1, -1, -1, -1, -1, -1]);
+  });
+
+  it('lets a mouse wheel turn a control that a touchpad turns sideways', () => {
+    expect(play(NOTCH, { axis: 'x' })).toEqual([1]);
+    expect(play(SLOW_NOTCHES, { axis: 'x' })).toEqual([-1, -1, -1, -1]);
   });
 
   it('turns one page for a swipe, however far its momentum carries it', () => {
@@ -56,14 +64,13 @@ describe('wheel steps', () => {
     expect(play(back, { axis: 'x' })).toEqual([1, -1]);
   });
 
-  it('turns only the way it is set to', () => {
+  it('turns a control by touchpad only the way it moves', () => {
     expect(play(SWIPE_LEFT)).toEqual([]);
     expect(play(SWIPE_UP, { axis: 'x' })).toEqual([]);
-    expect(play(NOTCH, { axis: 'x' })).toEqual([]);
     expect(play([[0, 4, 0]], { axis: 'x' })).toEqual([1]);
   });
 
-  it('turns a dial again for each stretch of a swipe', () => {
+  it('turns a dial again for each stretch of a swipe, and once a notch', () => {
     expect(play(SWIPE_UP, { travel: 40 })).toEqual([1, 1]);
     expect(play(NOTCH, { travel: 40 })).toEqual([1]);
   });
