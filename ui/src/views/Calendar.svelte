@@ -40,10 +40,20 @@
     month = addMonths(month, n);
   }
 
+  // One month per wheel notch. A touchpad sends a stream of small steps, each of which turned a month,
+  // so one swipe ran through a year or more: it turns one per notch's worth of travel, no faster than
+  // the slide can be read, as the overview's rows page.
+  let wheelDelta = 0;
+  let wheeledAt = 0;
   function wheel(e: WheelEvent) {
-    if (Math.abs(e.deltaY) < 4) return;
+    if (!e.deltaY) return;
     e.preventDefault();
-    shift(e.deltaY > 0 ? 1 : -1);
+    if (Math.sign(e.deltaY) !== Math.sign(wheelDelta)) wheelDelta = 0;
+    wheelDelta += e.deltaY;
+    if (Math.abs(wheelDelta) < 40 || e.timeStamp - wheeledAt < 110) return;
+    wheeledAt = e.timeStamp;
+    shift(Math.sign(wheelDelta));
+    wheelDelta = 0;
   }
 
   function time(o: Occurrence): string {
