@@ -15,7 +15,15 @@ use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, WebviewWindow};
 const EDGE: f64 = 16.0;
 const GAP: f64 = 16.0;
 const PITCH: f64 = 164.0 + GAP;
-const GLIDE_MS: f64 = 300.0;
+// The glide onto the grid after a drop: short, and on a curve that arrives rather than creeps, 95% of
+// the way in 100ms. The morph's curve spent its last 5% over a further 140ms, and the drop read as slow.
+const GLIDE_MS: f64 = 220.0;
+const GLIDE: Curve = (0.2, 0.9, 0.2, 1.0);
+// A drag whose pointer has rested this long is over, though the button may still be down.
+const REST_MS: f64 = 150.0;
+// The window morph shares the page's curve, so the two land on the same frame. Keep in step with MORPH in
+// ui/src/lib/motion.ts.
+const MORPH: Curve = (0.22, 0.8, 0.22, 1.0);
 const MAX: (f64, f64) = (440.0, 600.0);
 // The corner of the system's own widgets, measured beside them on macOS 26.
 #[cfg(target_os = "macos")]
@@ -477,11 +485,11 @@ pub fn morph(app: &AppHandle, window: WebviewWindow, w: f64, h: f64, start: f64,
     let Some(home) = *state.home.lock().unwrap() else { return };
     let Some(from) = current(&window) else { return };
     let ms = if state.morph.load(Ordering::Relaxed) { ms } else { 0.0 };
-    animate(app, window.clone(), from, target(&window, home, size), start, ms);
+    animate(app, window.clone(), from, target(&window, home, size), start, ms, MORPH);
 }
 
-/// The page asks for this when a press lands on anything that is not a control. Once the button
-/// comes up, the widget glides onto the grid.
+/// The page asks for this when a press lands on anything that is not a control. Once the pointer
+/// comes to rest, or the button comes up, the widget glides onto the grid.
 pub fn drag(app: &AppHandle, window: WebviewWindow) {
     widget(app).dragging.store(true, Ordering::Relaxed);
     let moving = window.clone();
@@ -491,14 +499,37 @@ pub fn drag(app: &AppHandle, window: WebviewWindow) {
     let app = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_millis(80));
+        // Where the pointer came to rest and when, and whether the widget has gone onto the grid from
+        // there. Waiting for the button alone, the widget sat off the grid for most of a second after
+        // a three-finger drag: the system holds the button down that long after the fingers lift.
+        let (mut rest, mut since, mut placed) = (cursor(), now_ms(), false);
+        // Watched closely, so the glide starts as the button comes up rather than up to 30ms after.
         while mouse_down() {
-            std::thread::sleep(Duration::from_millis(30));
+            std::thread::sleep(Duration::from_millis(8));
+            let at = cursor();
+            if apart(at, rest) {
+                // Dragged on: the drag has the window again.
+                if placed {
+                    widget(&app).animation.fetch_add(1, Ordering::SeqCst);
+                }
+                (rest, since, placed) = (at, now_ms(), false);
+            } else if !placed && rest.is_some() && now_ms() - since >= REST_MS {
+                placed = true;
+                settle(&app, window.clone());
+            }
         }
         widget(&app).dragging.store(false, Ordering::Relaxed);
         // The move loop kept the release from the page, which may have gone on selecting meanwhile.
         crate::emit(&app, "moved", Value::Null);
-        settle(&app, window);
+        if !placed {
+            settle(&app, window);
+        }
     });
+}
+
+/// Whether the pointer has left where it rested, by more than the twitch of fingers lifting.
+fn apart(a: Option<(f64, f64)>, b: Option<(f64, f64)>) -> bool {
+    matches!((a, b), (Some(a), Some(b)) if (a.0 - b.0).hypot(a.1 - b.1) > 2.0)
 }
 
 pub(crate) fn settle(app: &AppHandle, window: WebviewWindow) {
@@ -513,16 +544,13 @@ pub(crate) fn settle(app: &AppHandle, window: WebviewWindow) {
     let y = snap(from.y, desk.y, desk.bottom(), h, &lines(&down, h));
     *state.home.lock().unwrap() = Some((x, y));
     state.save();
-    animate(app, window, from, Rect { x, y, w, h }, now_ms(), GLIDE_MS);
+    animate(app, window, from, Rect { x, y, w, h }, now_ms(), GLIDE_MS, GLIDE);
 }
 
-// The window morph and the page share one curve and one start instant, so the native edge and the
-// CSS chrome land on the same frame. Keep in step with MORPH in ui/src/lib/motion.ts.
-fn ease(t: f64) -> f64 {
-    const X1: f64 = 0.22;
-    const Y1: f64 = 0.8;
-    const X2: f64 = 0.22;
-    const Y2: f64 = 1.0;
+/// A cubic Bézier easing, as CSS writes one: (x1, y1, x2, y2).
+type Curve = (f64, f64, f64, f64);
+
+fn ease(t: f64, (x1, y1, x2, y2): Curve) -> f64 {
     let bezier = |s: f64, p1: f64, p2: f64| 3.0 * p1 * s * (1.0 - s).powi(2) + 3.0 * p2 * s * s * (1.0 - s) + s.powi(3);
     let slope = |s: f64, p1: f64, p2: f64| 3.0 * p1 * (1.0 - s).powi(2) + 6.0 * (p2 - p1) * s * (1.0 - s) + 3.0 * (1.0 - p2) * s * s;
     if t <= 0.0 {
@@ -533,19 +561,22 @@ fn ease(t: f64) -> f64 {
     }
     let mut s = t;
     for _ in 0..8 {
-        let x = bezier(s, X1, X2) - t;
-        let dx = slope(s, X1, X2);
+        let x = bezier(s, x1, x2) - t;
+        let dx = slope(s, x1, x2);
         if x.abs() < 1e-5 || dx.abs() < 1e-6 {
             break;
         }
         s -= x / dx;
     }
-    bezier(s.clamp(0.0, 1.0), Y1, Y2)
+    bezier(s.clamp(0.0, 1.0), y1, y2)
 }
 
 /// A background thread samples the curve from the shared wall clock and hands each frame to the main
-/// thread, so page and window agree on every frame without talking to each other.
-fn animate(app: &AppHandle, window: WebviewWindow, from: Rect, to: Rect, start: f64, ms: f64) {
+/// thread, so page and window agree on every frame without talking to each other. It takes one frame
+/// per refresh of the screen, as Windows paces its own on DwmFlush: on a timer of its own, 10ms apart
+/// against the screen's 16.7, the window moved one step on some refreshes and two on others, and a
+/// glide stuttered.
+fn animate(app: &AppHandle, window: WebviewWindow, from: Rect, to: Rect, start: f64, ms: f64, curve: Curve) {
     let state = widget(app);
     let generation = state.animation.fetch_add(1, Ordering::SeqCst) + 1;
     if ms <= 0.0 || !window.is_visible().unwrap_or(false) {
@@ -561,12 +592,13 @@ fn animate(app: &AppHandle, window: WebviewWindow, from: Rect, to: Rect, start: 
         if wait > 0.0 {
             std::thread::sleep(Duration::from_secs_f64(wait / 1000.0));
         }
+        let refresh = Refresh::new();
         loop {
             if widget(&app).animation.load(Ordering::SeqCst) != generation {
                 return;
             }
             let t = ((now_ms() - start) / ms).clamp(0.0, 1.0);
-            let e = ease(t);
+            let e = ease(t, curve);
             let lerp = |a: f64, b: f64| a + (b - a) * e;
             let frame = Rect { x: lerp(from.x, to.x), y: lerp(from.y, to.y), w: lerp(from.w, to.w), h: lerp(from.h, to.h) };
             let (app2, win) = (app.clone(), window.clone());
@@ -580,9 +612,99 @@ fn animate(app: &AppHandle, window: WebviewWindow, from: Rect, to: Rect, start: 
                 let _ = window.run_on_main_thread(move || refresh_shadow(&win));
                 return;
             }
-            std::thread::sleep(Duration::from_millis(8));
+            refresh.wait();
         }
     });
+}
+
+/// Wakes a thread at each refresh of the main screen; every 8ms without a display link. CVDisplayLink
+/// is deprecated from macOS 15, but its replacement, the window's display link, is 14's.
+struct Refresh {
+    #[cfg(target_os = "macos")]
+    link: Option<Link>,
+}
+
+#[cfg(target_os = "macos")]
+type Tick = dyn Fn(
+    std::ptr::NonNull<objc2_core_video::CVDisplayLink>,
+    std::ptr::NonNull<objc2_core_video::CVTimeStamp>,
+    std::ptr::NonNull<objc2_core_video::CVTimeStamp>,
+    objc2_core_video::CVOptionFlags,
+    std::ptr::NonNull<objc2_core_video::CVOptionFlags>,
+) -> objc2_core_video::CVReturn;
+
+#[cfg(target_os = "macos")]
+struct Link {
+    link: objc2_core_foundation::CFRetained<objc2_core_video::CVDisplayLink>,
+    ticks: std::sync::mpsc::Receiver<()>,
+    // Kept for as long as the link may call it.
+    _tick: block2::RcBlock<Tick>,
+}
+
+impl Refresh {
+    #[cfg(target_os = "macos")]
+    #[allow(deprecated)]
+    fn new() -> Self {
+        use objc2_core_video::{kCVReturnSuccess, CVDisplayLink};
+        use std::ptr::NonNull;
+        let mut raw: *mut CVDisplayLink = std::ptr::null_mut();
+        // SAFETY: `raw` is a valid out-pointer, and on success holds a link this side now owns.
+        let link = unsafe {
+            if CVDisplayLink::create_with_active_cg_displays(NonNull::from(&mut raw)) != kCVReturnSuccess {
+                return Self { link: None };
+            }
+            let Some(raw) = NonNull::new(raw) else { return Self { link: None } };
+            objc2_core_foundation::CFRetained::from_raw(raw)
+        };
+        let (tick, ticks) = std::sync::mpsc::channel();
+        let handler: block2::RcBlock<Tick> = block2::RcBlock::new(move |_, _, _, _, _| {
+            let _ = tick.send(());
+            kCVReturnSuccess
+        });
+        // SAFETY: the block outlives the link's use of it: the link is stopped before either goes.
+        if unsafe { link.set_output_handler(&*handler as *const _ as *mut _) } != kCVReturnSuccess || link.start() != kCVReturnSuccess {
+            return Self { link: None };
+        }
+        Self { link: Some(Link { link, ticks, _tick: handler }) }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn new() -> Self {
+        Self {}
+    }
+
+    /// Until the next refresh; at once if one went by while the last frame was being made.
+    fn wait(&self) {
+        #[cfg(target_os = "macos")]
+        if let Some(Link { ticks, .. }) = &self.link {
+            let _ = ticks.recv_timeout(Duration::from_millis(50));
+            while ticks.try_recv().is_ok() {}
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(8));
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl Drop for Refresh {
+    #[allow(deprecated)]
+    fn drop(&mut self) {
+        if let Some(Link { link, .. }) = &self.link {
+            link.stop();
+        }
+    }
+}
+
+/// Where the pointer is, in points on the desktop.
+#[cfg(target_os = "macos")]
+fn cursor() -> Option<(f64, f64)> {
+    let at = objc2_app_kit::NSEvent::mouseLocation();
+    Some((at.x, at.y))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn cursor() -> Option<(f64, f64)> {
+    None
 }
 
 #[cfg(target_os = "macos")]
@@ -706,8 +828,10 @@ mod tests {
 
     #[test]
     fn curve_ends_and_eases_out() {
-        assert_eq!(ease(0.0), 0.0);
-        assert_eq!(ease(1.0), 1.0);
-        assert!(ease(0.3) > 0.6);
+        assert_eq!(ease(0.0, MORPH), 0.0);
+        assert_eq!(ease(1.0, MORPH), 1.0);
+        assert!(ease(0.3, MORPH) > 0.6);
+        // The glide onto the grid is nearly there (about 95%) 100ms into its 220.
+        assert!(ease(100.0 / GLIDE_MS, GLIDE) > 0.94);
     }
 }

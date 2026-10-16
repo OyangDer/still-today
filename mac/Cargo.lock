@@ -2723,6 +2723,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d425caf1df73233f29fd8a5c3e5edbc30d2d4307870f802d18f00d83dc5141a6"
 dependencies = [
  "bitflags 2.13.2",
+ "block2",
  "objc2",
  "objc2-core-foundation",
  "objc2-core-graphics",
@@ -4007,6 +4008,8 @@ dependencies = [
  "mac-notification-sys",
  "objc2",
  "objc2-app-kit",
+ "objc2-core-foundation",
+ "objc2-core-video",
  "objc2-foundation",
  "objc2-quartz-core",
  "reqwest 0.12.28",
