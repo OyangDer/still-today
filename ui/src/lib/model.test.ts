@@ -18,6 +18,33 @@ describe('appearance', () => {
   });
 });
 
+describe('a damaged save', () => {
+  it('drops a timer whose task is not a key, and reads Canvas dates that are not text as none', () => {
+    const data = readSaved(
+      JSON.stringify({ timer: { task: 5, duration: 60, remaining: 0, endsAt: 1, startedAt: '2026-10-17T00:00:00Z' }, canvas: { host: 'x.edu', tokenExpires: 20261231, lastSync: {} } }),
+      'zh',
+    )!;
+    expect(data.timer).toBeNull();
+    expect(data.canvas).toMatchObject({ host: 'x.edu', tokenExpires: null, lastSync: null });
+  });
+
+  it('reads each field of an item as the kind the agenda reads, so one bad field leaves the rest working', () => {
+    const data = readSaved(
+      JSON.stringify({
+        tasks: { a: { id: 'a', title: 42, due: 20261020, timed: 'yes', notes: null, done: 1, doneAt: {}, created: '' } },
+        events: { e: { id: 'e', title: 'Lab', start: '2026-10-20T01:00:00.000Z', end: [], allDay: false, location: null } },
+        focus: [{ id: 'f', task: 7, title: null, start: '2026-10-17T01:00:00.000Z', seconds: '1500', completed: true }],
+      }),
+      'zh',
+    )!;
+    expect(data.tasks.a).toMatchObject({ title: '42', due: null, timed: false, notes: '', done: false, doneAt: null });
+    expect(data.events.e).toMatchObject({ title: 'Lab', end: null, location: '' });
+    expect(data.focus).toEqual([]);
+    expect(() => upcomingEvents(data, new Date(2026, 9, 19))).not.toThrow();
+    expect(todos(data).map((t) => t.title)).toEqual(['42']);
+  });
+});
+
 describe('occurrence keys', () => {
   it('pads the all-day dates older versions wrote unpadded, keeping both readings of an ambiguous one', () => {
     const data = readSaved(

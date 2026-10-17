@@ -202,9 +202,10 @@ export function monthMarks(data: Data, days: Date[]): Map<string, DayMarks> {
   const from = startOfDay(days[0]);
   const to = addDays(startOfDay(days[days.length - 1]), 1);
   for (const o of occurrences(data, from, to)) {
-    const lastDay = o.allDay && o.end ? addDays(o.end, -1) : o.start;
-    for (let d = startOfDay(o.start); d <= lastDay && d < to; d = addDays(d, 1)) {
-      if (d < from) continue;
+    // A timed event over several days marks each of them, as the day lists show it on each; one ending
+    // at midnight does not mark the day it ends on. Walked from the first day shown, not from its start.
+    const lastDay = o.end ? (o.allDay ? addDays(o.end, -1) : new Date(o.end.getTime() - 1)) : o.start;
+    for (let d = startOfDay(o.start < from ? from : o.start); d <= lastDay && d < to; d = addDays(d, 1)) {
       const key = dayKey(d);
       const m = marks.get(key) ?? { events: 0, deadlines: 0 };
       if (o.kind === 'deadline' || o.kind === 'token') m.deadlines++;

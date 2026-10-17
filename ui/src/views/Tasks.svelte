@@ -64,6 +64,23 @@
     return out;
   });
 
+  // Rows come and go one by one, but a change of more than a screenful at once (a search, a sync that
+  // drops a term's assignments) swaps the list whole. Svelte pins each row it takes away with a forced
+  // layout as long as the list: with 3000 rows a search keystroke took up to 2 seconds, and a sync that
+  // took thousands away froze the widget for over a minute.
+  const BULK = 12;
+  let shown = new Set<string>();
+  let swaps = 0;
+  const swap = $derived.by(() => {
+    const keys = new Set(entries.map((e) => e.key));
+    let changed = 0;
+    for (const key of shown) if (!keys.has(key)) changed++;
+    for (const key of keys) if (!shown.has(key)) changed++;
+    if (changed > BULK) swaps++;
+    shown = keys;
+    return swaps;
+  });
+
   // Each filter opens at its top.
   $effect(() => {
     void [filter, active];
@@ -147,10 +164,11 @@
   </div>
 
   <div class="list scroll" bind:this={list}>
-    <!-- A filter or course change swaps the whole list: the old one fades in place while the new one
-         rises into the same grid cell, so the two never stack or reflow each other. -->
+    <!-- A filter or course change, or a change of many rows at once, swaps the whole list: the old one
+         fades in place while the new one rises into the same grid cell, so the two never stack or
+         reflow each other. -->
     <div class="stack">
-      {#key `${filter}:${active}`}
+      {#key `${filter}:${active}:${swap}`}
         <div class="page" in:move={{ y: 8, duration: 280, delay: 90, easing: easeOut }} out:fade={{ duration: 110 }}>
           {#each entries as entry (entry.key)}
             <div class="entry" class:head={entry.kind === 'head'} animate:flip={{ duration: isReduced() ? 0 : 420, easing: easeMorph }} in:move={{ y: 6, duration: 280, easing: easeOut }} out:move={{ x: 24, duration: 200, easing: easeIn }}>

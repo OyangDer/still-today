@@ -106,6 +106,31 @@ describe('wheel steps', () => {
     expect(play(WANDERING_UP_DOWN, { travel: 40 })).toEqual([1, -1]);
   });
 
+  it('leaves the twitches back inside a run of swipes out of its count', () => {
+    // Two swipes: the first slows to 3px at 165ms and the second speeds up from there. The frames back
+    // between them (-1px to -17px) turned the page to and fro once each.
+    const first = SWIPE_UP_FROM_4.filter(([t]) => t <= 165);
+    expect(play(first)).toEqual([1]);
+    expect(play(SWIPE_UP_FROM_4)).toEqual([1, 1]);
+    const sideways = SWIPE_UP_FROM_4.map(([t, dx, dy]) => [t, dy, dx] as [number, number, number]);
+    expect(play(sideways, { axis: 'x' })).toEqual([1, 1]);
+  });
+
+  it('turns back once for a swipe back that starts while the last one still runs', () => {
+    // A swipe left, then, while its momentum slows, a swipe right, the two interleaved frame by frame.
+    const swipe: Recorded = [[0, 2, 0], [16, 8, 0], [32, 30, 0], [48, 60, 0], [64, 58, 0], [80, 55, 0], [96, 50, 0]];
+    let [t, momentum, back] = [112, 46, 3];
+    for (let i = 0; i < 10; i++, t += 16, momentum = Math.round(momentum * 0.9), back = Math.min(60, back * 2))
+      swipe.push([t, momentum, 0], [t, -back, 0]);
+    expect(play(swipe, { axis: 'x' })).toEqual([1, -1]);
+  });
+
+  it('turns a step for each notch of a mouse wheel in WebView2, 100px a notch', () => {
+    const slow: Recorded = [[0, 0, 100], [200, 0, 100], [400, 0, -100], [600, 0, 100]];
+    expect(play(slow, { axis: 'x' })).toEqual([1, 1, -1, 1]);
+    expect(play(slow, { travel: 40 })).toEqual([1, 1, -1, 1]);
+  });
+
   it('turns a dial again for each stretch of a swipe, and once a notch', () => {
     expect(play(SWIPE_UP, { travel: 40 })).toEqual([1, 1]);
     expect(play(NOTCH, { travel: 40 })).toEqual([1]);

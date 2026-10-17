@@ -62,6 +62,8 @@ class Store {
   tab = $state<Tab>('today');
   pages = $state<Page[]>([]);
   syncing = $state(false);
+  private syncAgain = false;
+  private popped = -Infinity;
   toast = $state<Toast | null>(null);
   aura = $state<AuraSample | null>(null);
   /** Whether Windows blurs behind the widget; Aura stands in for the blur when it does not. */
@@ -224,6 +226,11 @@ class Store {
   }
 
   pop(): void {
+    // Once for a double click on Back, Hide or Delete: the second click landed on the page sliding out
+    // or on the Back of the page under it, and went back past that page too.
+    const now = performance.now();
+    if (now - this.popped < 400) return;
+    this.popped = now;
     this.pages = this.pages.slice(0, -1);
   }
 
@@ -583,8 +590,14 @@ class Store {
   // ---- sync --------------------------------------------------------------------------------
 
   async sync(manual = false): Promise<void> {
-    if (this.syncing) return;
+    // Asked for during a pass (a Canvas just connected, say), another follows it: dropped, a new
+    // account waited for the next pass, up to ten minutes.
+    if (this.syncing) {
+      this.syncAgain = true;
+      return;
+    }
     this.syncing = true;
+    this.syncAgain = false;
     try {
       const feeds = this.data.feeds.filter((f) => !isCanvasFeed(this.data, f));
       // Anything else that stops a pass (a login portal's page where JSON should be, a host error)
@@ -599,14 +612,20 @@ class Store {
     }
     const error = this.syncError;
     if (manual && error) this.notify(t(error === 'token' ? 'sync.token' : error === 'partial' ? 'sync.partial' : 'sync.network'));
+    if (this.syncAgain) void this.sync();
   }
 
   // Assignments decide whether the pass worked; the calendar, announcements, colours and picture
   // each keep their last good copy when their own request fails.
   private async syncCanvas(): Promise<void> {
-    if (!this.data.canvas.host) return;
+    const host = this.data.canvas.host;
+    if (!host) return;
+    // Disconnected, or connected to another Canvas, while the requests were out: their answers belong
+    // to an account that is gone. Stored, they came back after Disconnect and stayed.
+    const gone = () => this.data.canvas.host !== host;
     const api = { get: (path: string) => call<HttpReply>('canvas.get', { path }) };
     const [list, profile] = await Promise.all([fetchCourses(api), fetchProfile(api)]);
+    if (gone()) return;
     // A token left from before (a first run that finds one, say) connects without the name Connect reads.
     if (profile) this.data.canvas.user ??= profile.name;
     if (typeof list === 'string') {
@@ -626,6 +645,7 @@ class Store {
       profile ? call<string | null>('canvas.avatar', { url: profile.avatar }).catch(() => undefined) : undefined,
       call<HttpReply>('canvas.token'),
     ]);
+    if (gone()) return;
     // The expiry chosen in Canvas when the token was made. Where Canvas will not say, the date the user
     // typed stands, unless Canvas still takes the token after it: then the date was wrong.
     const expiry = token.status === 200 && token.body ? tokenExpiry(token.body) : undefined;
@@ -745,7 +765,9 @@ class Store {
     const reply = await call<HttpReply>('feed.get', { id });
     const feed = this.data.feeds.find((f) => f.id === id);
     if (!feed) return;
-    if (reply.status !== 200 || !reply.body) {
+    // A page where the calendar should be (a login or maintenance page answering 200) is not getting
+    // through: stored, it emptied the feed's events and said all was well.
+    if (reply.status !== 200 || !reply.body || !isCalendar(reply.body)) {
       feed.error = reply.status === 401 || reply.status === 403 ? 'token' : 'network';
       return;
     }
@@ -834,6 +856,11 @@ class Store {
     if (reply.status === -6) return 'long';
     if (reply.status === -3) return 'bad';
     if (!reply.id || !reply.body) return reply.status === 200 ? 'bad' : 'offline';
+    // The host has already kept its address; it goes again with the answer that is not a calendar.
+    if (!isCalendar(reply.body)) {
+      void call('feed.remove', { id: reply.id });
+      return 'bad';
+    }
     this.data.feeds.push({ id: reply.id, name: reply.host ?? 'Calendar', host: reply.host ?? '', lastSync: new Date().toISOString(), error: null });
     const name = this.storeFeed(reply.id, reply.body);
     if (name) this.data.feeds[this.data.feeds.length - 1].name = name;
@@ -849,6 +876,9 @@ class Store {
     this.persist();
   }
 }
+
+/** Whether a feed's answer is a calendar at all. */
+const isCalendar = (body: string) => /^\s*BEGIN:VCALENDAR/i.test(body.replace(/^\uFEFF/, ''));
 
 /** Compares instants, not text: Canvas writes "…:00Z" where this app writes "…:00.000Z". */
 const after = (a: string, b: string) => (parseIso(a)?.getTime() ?? 0) > (parseIso(b)?.getTime() ?? 0);
