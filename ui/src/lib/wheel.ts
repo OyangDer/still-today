@@ -18,14 +18,19 @@ const NOTCH = 4;
 const CREEP = 12;
 /** How long a 4px step up or down waits to see whether a touchpad's next frame follows. */
 const HOLD = 40;
+/** How far back a swipe's recent frames are summed to tell a swipe back from the last one's momentum. */
+const RECENT = 64;
 
 type Wheel = Pick<WheelEvent, 'deltaX' | 'deltaY' | 'timeStamp'>;
 type Device = 'wheel' | 'pad';
 
-/** What an event says of its device on its own: null for a 4px step up or down, which either sends. */
+/** What an event says of its device on its own: null for a 4px step up or down, which either sends, or
+    for WebView2's whole notch of 100px (or a run of them). Taken for a touchpad, a Windows mouse's notch
+    turned nothing that moves sideways and two steps a notch on a dial. */
 function device(e: Wheel): Device | null {
   if (e.deltaX === 0 && !Number.isInteger(e.deltaY)) return 'wheel';
-  return e.deltaX === 0 && Math.abs(e.deltaY) === NOTCH ? null : 'pad';
+  const notch = Math.abs(e.deltaY) === NOTCH || (e.deltaY !== 0 && e.deltaY % 100 === 0);
+  return e.deltaX === 0 && notch ? null : 'pad';
 }
 
 /**
@@ -50,8 +55,10 @@ export function stepper(step: (way: 1 | -1) => void, { travel = 0, axis = 'y' }:
   let peak = 0;
   let floor = Infinity;
   let moved = 0;
+  // The swipe's frames of the last RECENT ms, its way: [timeStamp, travel].
+  let recent: [number, number][] = [];
   const reset = () => {
-    [sx, sy, along, dir, peak, floor, moved] = [0, 0, null, 0, 0, Infinity, 0];
+    [sx, sy, along, dir, peak, floor, moved, recent] = [0, 0, null, 0, 0, Infinity, 0, []];
   };
 
   const swipe = (e: Wheel) => {
@@ -68,22 +75,33 @@ export function stepper(step: (way: 1 | -1) => void, { travel = 0, axis = 'y' }:
       return;
     }
     if (along) {
-      const d = along === 'x' ? e.deltaX : e.deltaY;
+      const way = along;
+      const d = way === 'x' ? e.deltaX : e.deltaY;
       const size = Math.abs(d);
-      if (d && Math.sign(d) !== dir) floor = 0;
-      else if (size >= peak) [peak, floor] = [size, Infinity];
-      else floor = Math.min(floor, size);
-      // Slowed to a quarter or a crawl (or turned back), then faster again: the next swipe, which this
-      // frame starts.
-      if (floor > Math.max(3, peak / 4) || size < floor * 2 + 4) return;
-      reset();
+      // A swipe back while the last one's momentum still runs sends both at once, interleaved frame by
+      // frame. It counts once the recent frames go back on balance, by more than a twitch; the momentum
+      // only slows and the swipe back only speeds up, so it does not turn again. Taken frame by frame,
+      // each frame of either stream started a swipe, and one swipe back turned a page to and fro.
+      recent = recent.filter(([t]) => e.timeStamp - t < RECENT).concat([[e.timeStamp, d]]);
+      const net = recent.reduce((sum, [, part]) => sum + part, 0);
+      if (Math.sign(net) === -dir && Math.abs(net) >= CREEP) {
+        reset();
+        [sx, sy] = way === 'x' ? [net - e.deltaX, 0] : [0, net - e.deltaY];
+      } else {
+        if (Math.sign(d) === -dir) return;
+        if (size >= peak) [peak, floor] = [size, Infinity];
+        else floor = Math.min(floor, size);
+        // Slowed to a quarter or a crawl, then faster again: the next swipe, which this frame starts.
+        if (floor > Math.max(3, peak / 4) || size < floor * 2 + 4) return;
+        reset();
+      }
     }
     sx += e.deltaX;
     sy += e.deltaY;
     if (Math.max(Math.abs(e.deltaX), Math.abs(e.deltaY)) < NOTCH && Math.max(Math.abs(sx), Math.abs(sy)) < CREEP) return;
     along = Math.abs(sx) > Math.abs(sy) ? 'x' : 'y';
     dir = Math.sign(along === 'x' ? sx : sy);
-    [peak, floor, moved] = [Math.abs(along === 'x' ? e.deltaX : e.deltaY), Infinity, 0];
+    [peak, floor, moved, recent] = [Math.abs(along === 'x' ? e.deltaX : e.deltaY), Infinity, 0, [[e.timeStamp, along === 'x' ? e.deltaX : e.deltaY]]];
     if (along === axis) step(dir > 0 ? 1 : -1);
   };
 
