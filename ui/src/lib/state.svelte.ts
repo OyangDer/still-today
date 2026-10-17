@@ -63,6 +63,7 @@ class Store {
   pages = $state<Page[]>([]);
   syncing = $state(false);
   private syncAgain = false;
+  private popped = -Infinity;
   toast = $state<Toast | null>(null);
   aura = $state<AuraSample | null>(null);
   /** Whether Windows blurs behind the widget; Aura stands in for the blur when it does not. */
@@ -213,6 +214,11 @@ class Store {
   }
 
   pop(): void {
+    // Once for a double click on Back, Hide or Delete: the second click landed on the page sliding out
+    // or on the Back of the page under it, and went back past that page too.
+    const now = performance.now();
+    if (now - this.popped < 400) return;
+    this.popped = now;
     this.pages = this.pages.slice(0, -1);
   }
 

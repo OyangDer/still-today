@@ -74,6 +74,12 @@
     frame = { ...size, start, ms };
   });
 
+  // A page on its way out takes no more clicks: a double click on Hide or Delete did it twice.
+  function leave(node: Element, options: Parameters<typeof move>[1]) {
+    (node as HTMLElement).inert = true;
+    return move(node, options);
+  }
+
   // A press on anything that is not a control moves the widget, as in the WPF release. The host
   // runs the native move loop, so dragging across monitors and DPI changes behave like any window.
   const CONTROLS = 'button, a, input, textarea, select, label, [role=button], [role=tab], [role=spinbutton], [tabindex]:not([tabindex="-1"])';
@@ -134,7 +140,7 @@
             class="view wide page active"
             class:covered={i < app.pages.length - 1}
             in:move={{ x: 24, duration: 300, delay: pageDelay, easing: easePage }}
-            out:move={{ x: 24, duration: 150, easing: easeIn }}
+            out:leave={{ x: 24, duration: 150, easing: easeIn }}
           >
             {#if page.kind === 'task'}
               <TaskDetail key={page.key} />
