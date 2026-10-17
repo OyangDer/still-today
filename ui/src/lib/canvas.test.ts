@@ -224,6 +224,18 @@ describe('course calendar, announcements and colours', () => {
     ]);
   });
 
+  it('lists an announcement once when paging sends it twice', async () => {
+    const api = canvas({
+      '/api/v1/announcements?context_codes[]=course_1&start_date=2026-09-10&per_page=50': {
+        body: [
+          { id: 1, title: 'Week 7', posted_at: '2026-09-20T01:00:00Z', context_code: 'course_1' },
+          { id: 1, title: 'Week 7', posted_at: '2026-09-20T01:00:00Z', context_code: 'course_1' },
+        ],
+      },
+    });
+    expect((await fetchAnnouncements(api, courses, new Date('2026-09-10T12:00:00Z')))?.map((a) => a.id)).toEqual(['1']);
+  });
+
   it('keeps only course colours that are plain hex', async () => {
     const api = canvas({ '/api/v1/users/self/colors': { body: { custom_colors: { course_1: '#F06291', user_7: '#000000', course_2: 'red;x' } } } });
     expect(await fetchColors(api)).toEqual({ '1': '#F06291' });

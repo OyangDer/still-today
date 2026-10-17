@@ -231,6 +231,9 @@ export async function fetchEvents(api: CanvasApi, courses: Course[], userId: str
 /** Announcements in the courses since a day, newest first. Null when any part fails. */
 export async function fetchAnnouncements(api: CanvasApi, courses: Course[], since: Date): Promise<Announcement[] | null> {
   const out: Announcement[] = [];
+  // Once each, as events are: a page shifting under the paging can send one twice, and the list,
+  // keyed by id, threw on the repeat.
+  const seen = new Set<string>();
   const day = since.toISOString().slice(0, 10);
   for (const part of chunks(courses)) {
     const query = part.map((c) => `context_codes[]=course_${c.id}`).join('&');
@@ -239,7 +242,8 @@ export async function fetchAnnouncements(api: CanvasApi, courses: Course[], sinc
     for (const a of list) {
       const courseId = courseOf(a.context_code);
       const postedAt = a.posted_at ?? a.created_at;
-      if (!courseId || !postedAt) continue;
+      if (!courseId || !postedAt || seen.has(String(a.id))) continue;
+      seen.add(String(a.id));
       out.push({
         id: String(a.id),
         title: a.title?.trim() ?? '',
