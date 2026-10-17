@@ -205,39 +205,43 @@ fn system_widgets() -> Vec<Rect> {
     const ON_SCREEN_ONLY: u32 = 1;
     const SPARE: f64 = 8.0;
 
-    // SAFETY: a Copy function hands over its own reference to a CFArray of CFDictionaries, toll-free
-    // bridged to their Foundation counterparts. Window bounds need no screen-recording permission.
-    let Some(list) = (unsafe { Retained::from_raw(CGWindowListCopyWindowInfo(ON_SCREEN_ONLY, 0)) }) else { return Vec::new() };
-    let number = |d: &NSDictionary<NSString, AnyObject>, key: &str| {
-        d.objectForKey(&NSString::from_str(key)).and_then(|v| v.downcast::<NSNumber>().ok()).map(|n| n.doubleValue())
-    };
-    let mut owners = std::collections::HashMap::new();
-    let mut found = Vec::new();
-    for info in list.iter() {
-        if number(&info, "kCGWindowLayer").is_none_or(|layer| layer >= 0.0) {
-            continue;
-        }
-        let Some(pid) = number(&info, "kCGWindowOwnerPID").map(|p| p as i32) else { continue };
-        let widgets = *owners.entry(pid).or_insert_with(|| {
-            NSRunningApplication::runningApplicationWithProcessIdentifier(pid)
-                .and_then(|a| a.bundleIdentifier())
-                .is_some_and(|id| id.to_string() == "com.apple.notificationcenterui")
-        });
-        // Notification Center also keeps a clear window around a widget, 52pt past it all round (seen on
-        // macOS 27), which is not one.
-        if !widgets || number(&info, "kCGWindowAlpha").is_some_and(|alpha| alpha <= 0.0) {
-            continue;
-        }
-        let Some(bounds) = info.objectForKey(&NSString::from_str("kCGWindowBounds")).and_then(|b| b.downcast::<NSDictionary>().ok()) else { continue };
-        // SAFETY: kCGWindowBounds is a dictionary of numbers keyed by strings.
-        let bounds = unsafe { &*(Retained::as_ptr(&bounds) as *const NSDictionary<NSString, AnyObject>) };
-        if let (Some(x), Some(y), Some(w), Some(h)) = (number(bounds, "X"), number(bounds, "Y"), number(bounds, "Width"), number(bounds, "Height")) {
-            if w > 2.0 * SPARE && h > 2.0 * SPARE {
-                found.push(Rect { x: x + SPARE, y: y + SPARE, w: w - 2.0 * SPARE, h: h - 2.0 * SPARE });
+    // Run on long-lived worker threads, which have no pool of their own to let go of what AppKit hands
+    // back autoreleased.
+    objc2::rc::autoreleasepool(|_| {
+        // SAFETY: a Copy function hands over its own reference to a CFArray of CFDictionaries, toll-free
+        // bridged to their Foundation counterparts. Window bounds need no screen-recording permission.
+        let Some(list) = (unsafe { Retained::from_raw(CGWindowListCopyWindowInfo(ON_SCREEN_ONLY, 0)) }) else { return Vec::new() };
+        let number = |d: &NSDictionary<NSString, AnyObject>, key: &str| {
+            d.objectForKey(&NSString::from_str(key)).and_then(|v| v.downcast::<NSNumber>().ok()).map(|n| n.doubleValue())
+        };
+        let mut owners = std::collections::HashMap::new();
+        let mut found = Vec::new();
+        for info in list.iter() {
+            if number(&info, "kCGWindowLayer").is_none_or(|layer| layer >= 0.0) {
+                continue;
+            }
+            let Some(pid) = number(&info, "kCGWindowOwnerPID").map(|p| p as i32) else { continue };
+            let widgets = *owners.entry(pid).or_insert_with(|| {
+                NSRunningApplication::runningApplicationWithProcessIdentifier(pid)
+                    .and_then(|a| a.bundleIdentifier())
+                    .is_some_and(|id| id.to_string() == "com.apple.notificationcenterui")
+            });
+            // Notification Center also keeps a clear window around a widget, 52pt past it all round (seen on
+            // macOS 27), which is not one.
+            if !widgets || number(&info, "kCGWindowAlpha").is_some_and(|alpha| alpha <= 0.0) {
+                continue;
+            }
+            let Some(bounds) = info.objectForKey(&NSString::from_str("kCGWindowBounds")).and_then(|b| b.downcast::<NSDictionary>().ok()) else { continue };
+            // SAFETY: kCGWindowBounds is a dictionary of numbers keyed by strings.
+            let bounds = unsafe { &*(Retained::as_ptr(&bounds) as *const NSDictionary<NSString, AnyObject>) };
+            if let (Some(x), Some(y), Some(w), Some(h)) = (number(bounds, "X"), number(bounds, "Y"), number(bounds, "Width"), number(bounds, "Height")) {
+                if w > 2.0 * SPARE && h > 2.0 * SPARE {
+                    found.push(Rect { x: x + SPARE, y: y + SPARE, w: w - 2.0 * SPARE, h: h - 2.0 * SPARE });
+                }
             }
         }
-    }
-    found
+        found
+    })
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -831,6 +835,20 @@ pub fn dress(window: &WebviewWindow) {
     let _ = window.set_shadow(true);
 }
 
+/// The window's own class, tao's, for overriding its methods: not the subclass key-value observing puts
+/// over it, which goes again once nothing observes the window, and the overrides with it.
+#[cfg(target_os = "macos")]
+pub(crate) fn own_class(ns: &objc2::runtime::AnyObject) -> &'static objc2::runtime::AnyClass {
+    let mut class = ns.class();
+    while class.name().to_bytes().starts_with(b"NSKVONotifying_") {
+        match class.superclass() {
+            Some(parent) => class = parent,
+            None => break,
+        }
+    }
+    class
+}
+
 /// The system's window tiling (macOS 15 on) moves a window dropped with the pointer at a screen edge
 /// into that half of the screen: once the button is up, it asks the window to go there. The widget
 /// declines, as its place is the grid's. Taken, the request carried the widget off the grid just after it landed there,
@@ -844,12 +862,7 @@ fn untile(ns: &objc2_app_kit::NSWindow) {
             done.call((Bool::NO,));
         }
     }
-    // On tao's window class, under the subclass key-value observing puts over it.
-    let mut class = ns.class();
-    while class.name().to_bytes().starts_with(b"NSKVONotifying_") {
-        let Some(parent) = class.superclass() else { return };
-        class = parent;
-    }
+    let class = own_class(ns);
     let sel = objc2::sel!(_resizeFromWindowManagerWithTargetGeometry:springSettings:completion:);
     // SAFETY: the method takes (id, id, block) and returns nothing, as `decline` does; a system without
     // tiling never sends it.

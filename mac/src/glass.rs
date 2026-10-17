@@ -181,7 +181,7 @@ pub fn round_window(window: &WebviewWindow, radius: f64) {
         // SAFETY: as in keep_active, the override reaches only Tauri's own NSWindow subclass. The mask
         // is retained above and never released.
         unsafe {
-            let class = (*ns).class() as *const AnyClass;
+            let class = crate::widget::own_class(&*ns) as *const AnyClass;
             let name = sel!(_cornerMask);
             let method = class_getInstanceMethod(class, name);
             if method.is_null() {
@@ -212,7 +212,7 @@ fn keep_active(window: &WebviewWindow) {
     // SAFETY: Tauri hands back the window's live NSWindow; its class is Tauri's own NSWindow subclass, so
     // the override reaches only its windows. A selector this AppKit lacks is left alone.
     unsafe {
-        let class = (*(ns as *const AnyObject)).class() as *const AnyClass;
+        let class = crate::widget::own_class(&*(ns as *const AnyObject)) as *const AnyClass;
         for name in [sel!(_hasActiveAppearance), sel!(_hasActiveAppearanceIgnoringKeyFocus)] {
             let method = class_getInstanceMethod(class, name);
             if !method.is_null() {
