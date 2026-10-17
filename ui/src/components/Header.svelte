@@ -353,12 +353,14 @@
     position: relative;
   }
 
+  /* Round, as the sync capsule across the bar: in the card's corner, a curve concentric with the
+     card's (26pt on the Mac, 4pt above the button and 10pt beside it) is already past half its side. */
   .more {
     display: grid;
     place-items: center;
     width: 28px;
     height: 28px;
-    border-radius: 8px;
+    border-radius: 50%;
     color: var(--muted);
     transition: background-color var(--t-micro), color var(--t-micro);
   }
