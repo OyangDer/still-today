@@ -217,11 +217,50 @@ const list = <T>(v: unknown): T[] => (Array.isArray(v) ? (v.filter(isRecord) as 
 const entries = <T>(v: unknown): Record<string, T> =>
   Object.fromEntries(Object.entries(record(v)).filter(([, item]) => isRecord(item))) as Record<string, T>;
 
+/**
+ * Each saved item's fields as the code reads them: text as text, dates as text or none, switches as
+ * true or false, numbers as numbers or none. A whole list passes `intact` with one field of one item of
+ * the wrong kind (a due date written as a number, say), and that threw in the agenda while the widget
+ * drew: blank at every start, for one bad field.
+ */
+type Field = 'text' | 'text?' | 'switch' | 'number?';
+const FIELDS: Record<'task' | 'assignment' | 'event' | 'feedEvent' | 'canvasEvent' | 'announcement' | 'focus' | 'feed' | 'submission', Record<string, Field>> = {
+  task: { id: 'text', title: 'text', due: 'text?', timed: 'switch', notes: 'text', done: 'switch', doneAt: 'text?', created: 'text' },
+  assignment: {
+    id: 'text', courseId: 'text', course: 'text', title: 'text', due: 'text?', opens: 'text?', closes: 'text?', url: 'text?', points: 'number?',
+    quiz: 'switch', description: 'text?', canvasState: 'text?', done: 'switch', doneAt: 'text?', doneBy: 'text?', updated: 'switch', hidden: 'switch',
+  },
+  event: { id: 'text', title: 'text', start: 'text', end: 'text?', allDay: 'switch', location: 'text' },
+  feedEvent: { key: 'text', title: 'text', start: 'text', end: 'text?', allDay: 'switch', location: 'text' },
+  canvasEvent: { id: 'text', title: 'text', start: 'text', end: 'text?', allDay: 'switch', location: 'text', courseId: 'text?', course: 'text?' },
+  announcement: { id: 'text', title: 'text', courseId: 'text', course: 'text', postedAt: 'text', author: 'text?', message: 'text?', url: 'text?', read: 'switch' },
+  focus: { id: 'text', task: 'text?', title: 'text?', start: 'text', seconds: 'number?', completed: 'switch' },
+  feed: { id: 'text', name: 'text', host: 'text', lastSync: 'text?', error: 'text?' },
+  submission: { state: 'text?', submittedAt: 'text?', late: 'switch', missing: 'switch', excused: 'switch', score: 'number?', grade: 'text?' },
+};
+function fields<T>(item: Record<string, unknown>, kinds: Record<string, Field>): T {
+  const out: Record<string, unknown> = { ...item };
+  for (const [key, kind] of Object.entries(kinds)) {
+    const v = item[key];
+    if (v === undefined && kind !== 'text') continue;
+    if (kind === 'text') out[key] = typeof v === 'string' ? v : typeof v === 'number' ? String(v) : '';
+    else if (kind === 'text?') out[key] = typeof v === 'string' ? v : null;
+    else if (kind === 'switch') out[key] = v === true;
+    else out[key] = typeof v === 'number' && Number.isFinite(v) ? v : null;
+  }
+  return out as T;
+}
+const shaped = <T>(items: Record<string, unknown>[], kinds: Record<string, Field>): T[] => items.map((item) => fields<T>(item, kinds));
+const shapedMap = <T>(map: Record<string, Record<string, unknown>>, kinds: Record<string, Field>): Record<string, T> =>
+  Object.fromEntries(Object.entries(map).map(([k, item]) => [k, fields<T>(item, kinds)]));
+
 /** A timer that can run: anything less (a hand-edited file, say) showed NaN:NaN and kept a NaN session. */
 function timer(v: unknown): TimerState | null {
   if (!isRecord(v)) return null;
   const t = v as Partial<TimerState>;
-  const runs = Number.isFinite(t.duration) && Number.isFinite(t.remaining) && typeof t.startedAt === 'string' && (t.endsAt === null || Number.isFinite(t.endsAt));
+  // A task of the wrong kind (a number, say) threw where the timer's end looked it up, before the
+  // widget had drawn anything: blank at every start.
+  const runs = Number.isFinite(t.duration) && Number.isFinite(t.remaining) && typeof t.startedAt === 'string' && (t.endsAt === null || Number.isFinite(t.endsAt)) && (t.task === null || t.task === undefined || typeof t.task === 'string');
   return runs ? (t as TimerState) : null;
 }
 
@@ -247,14 +286,25 @@ export function normalize(raw: Partial<Data>, lang: Lang): Data {
       courseNames: record(settings.courseNames),
       hiddenCourses: Array.isArray(settings.hiddenCourses) ? settings.hiddenCourses.filter((id) => typeof id === 'string') : [],
     },
-    canvas: { ...canvas, colors: record(canvas.colors), courses: record(canvas.courses) },
-    feeds: list(raw.feeds),
-    assignments: entries(raw.assignments),
-    tasks: entries(raw.tasks),
-    events: entries(raw.events),
-    canvasEvents: list(raw.canvasEvents),
-    announcements: list(raw.announcements),
-    focus: list<FocusSession>(raw.focus).filter((s) => s.seconds >= MIN_FOCUS_SECONDS),
+    // The account's dates and names are read as text, by the header and the agenda among others.
+    canvas: {
+      ...canvas,
+      ...Object.fromEntries((['host', 'user', 'tokenExpires', 'lastSync', 'announcementsSeen', 'announcementsViewed'] as const).map((key) => [key, typeof canvas[key] === 'string' ? canvas[key] : null])),
+      colors: record(canvas.colors),
+      courses: record(canvas.courses),
+    },
+    feeds: shaped<Feed>(list(raw.feeds), FIELDS.feed),
+    assignments: Object.fromEntries(
+      Object.entries(shapedMap<Assignment>(entries(raw.assignments), FIELDS.assignment)).map(([k, a]) => [
+        k,
+        { ...a, submission: isRecord(a.submission) ? fields<Submission>(a.submission, FIELDS.submission) : null },
+      ]),
+    ),
+    tasks: shapedMap<Task>(entries(raw.tasks), FIELDS.task),
+    events: shapedMap<LocalEvent>(entries(raw.events), FIELDS.event),
+    canvasEvents: shaped<CanvasEvent>(list(raw.canvasEvents), FIELDS.canvasEvent),
+    announcements: shaped<Announcement>(list(raw.announcements), FIELDS.announcement),
+    focus: shaped<FocusSession>(list(raw.focus), FIELDS.focus).filter((s) => s.seconds !== null && s.seconds >= MIN_FOCUS_SECONDS),
     timer: timer(raw.timer),
     hiddenEvents: padHiddenKeys(raw.hiddenEvents),
     feedEvents: padFeedKeys(raw.feedEvents),
@@ -295,7 +345,7 @@ function padFeedKeys(feeds: unknown): Record<string, FeedEvent[]> {
   const out: Record<string, FeedEvent[]> = {};
   for (const [id, events] of Object.entries(feeds as Record<string, unknown>)) {
     if (!Array.isArray(events)) continue;
-    out[id] = (events.filter(isRecord) as unknown as FeedEvent[]).map((e) => {
+    out[id] = shaped<FeedEvent>(events.filter(isRecord), FIELDS.feedEvent).map((e) => {
       if (typeof e?.key !== 'string') return e;
       const padded = paddedKeys(`f:${id}:${e.key}`);
       if (!padded.length) return e;
