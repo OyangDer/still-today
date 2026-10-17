@@ -218,13 +218,15 @@
     color: var(--muted);
   }
 
+  /* A capsule, as the widget's other buttons are. */
   .new {
     display: inline-flex;
     align-items: center;
     gap: 4px;
     height: 26px;
-    padding: 0 9px 0 7px;
-    border-radius: 8px;
+    margin-left: -2px;
+    padding: 0 11px 0 9px;
+    border-radius: 999px;
     font-size: 12.5px;
     font-weight: 600;
     color: var(--accent);

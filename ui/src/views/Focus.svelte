@@ -470,14 +470,16 @@
     margin-bottom: 4px;
   }
 
+  /* A capsule, as PageHeader's back button is. */
   .back {
     display: inline-flex;
     align-items: center;
     gap: 4px;
     min-width: 0;
     height: 30px;
-    padding: 0 10px 0 2px;
-    border-radius: 8px;
+    margin-left: -4px;
+    padding: 0 12px 0 6px;
+    border-radius: 999px;
     font-weight: 650;
   }
 
