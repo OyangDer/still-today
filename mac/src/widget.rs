@@ -51,10 +51,13 @@ impl Rect {
 
 pub struct Widget {
     path: PathBuf,
-    // The user's chosen top-left corner. Larger states grow from it and are only pushed back inside
-    // the work area when they would not fit; returning to the compact size returns here.
+    // The user's chosen top-left corner for the compact card. Larger states grow from it (see `grow`);
+    // returning to the compact size returns here.
     home: Mutex<Option<(f64, f64)>>,
     size: Mutex<(f64, f64)>,
+    // The size the page last asked for short of its largest: the card at rest, which keeps clear of the
+    // system's widgets.
+    compact: Mutex<(f64, f64)>,
     animation: AtomicU64,
     dragging: AtomicBool,
     topmost: AtomicBool,
@@ -77,6 +80,7 @@ impl Widget {
             path,
             home: Mutex::new(home),
             size: Mutex::new((344.0, 320.0)),
+            compact: Mutex::new((344.0, 320.0)),
             animation: AtomicU64::new(0),
             dragging: AtomicBool::new(false),
             topmost: AtomicBool::new(false),
@@ -98,6 +102,15 @@ impl Widget {
 
     pub fn topmost(&self) -> bool {
         self.topmost.load(Ordering::Relaxed)
+    }
+
+    /// Takes a size the page asks for, and gives the compact one: this, unless it is the largest.
+    fn compact_for(&self, size: (f64, f64)) -> (f64, f64) {
+        let mut compact = self.compact.lock().unwrap();
+        if size.0 < MAX.0 {
+            *compact = size;
+        }
+        *compact
     }
 }
 
@@ -210,7 +223,9 @@ fn system_widgets() -> Vec<Rect> {
                 .and_then(|a| a.bundleIdentifier())
                 .is_some_and(|id| id.to_string() == "com.apple.notificationcenterui")
         });
-        if !widgets {
+        // Notification Center also keeps a clear window around a widget, 52pt past it all round (seen on
+        // macOS 27), which is not one.
+        if !widgets || number(&info, "kCGWindowAlpha").is_some_and(|alpha| alpha <= 0.0) {
             continue;
         }
         let Some(bounds) = info.objectForKey(&NSString::from_str("kCGWindowBounds")).and_then(|b| b.downcast::<NSDictionary>().ok()) else { continue };
@@ -237,30 +252,77 @@ fn current(window: &WebviewWindow) -> Option<Rect> {
     Some(Rect { x: p.x as f64 / s, y: p.y as f64 / s, w: z.width as f64 / s, h: z.height as f64 / s })
 }
 
-// Grows from the home corner; a size that would run past the work area's margin, under the Dock for
-// one, is pushed back inside it.
-fn target(window: &WebviewWindow, home: (f64, f64), (w, h): (f64, f64)) -> Rect {
+// Where the card shows at `size`, from the home corner: the compact card's top left.
+fn target(window: &WebviewWindow, home: (f64, f64), size: (f64, f64), compact: (f64, f64)) -> Rect {
     let work = area_of(window, home.0, home.1);
-    let x = home.0.min(work.right() - EDGE - w).max(work.x);
-    let y = home.1.min(work.bottom() - EDGE - h).max(work.y);
-    Rect { x, y, w, h }
+    let widgets = if size == compact { Vec::new() } else { system_widgets() };
+    grow(home, size, compact, work, &widgets)
 }
 
-// Where a card `length` long settles along one side of the desktop, from `start` to `end`: the closest
-// of the grid's lines, counted in from either edge, and of `lines`, which put it flush with the
-// system's widgets.
-fn snap(value: f64, start: f64, end: f64, length: f64, lines: &[f64]) -> f64 {
+// A card larger than the compact one grows from the home corner to the right and down. Where that would
+// cover one of the system's widgets, it grows from whichever other corner of the compact card keeps clear
+// of them, to the left, then up, then both, as a menu opens away from a screen's edge; where none does, to
+// the right and down, over them for as long as it is large. Each way is pushed back inside the work
+// area's margin, under the Dock for one.
+fn grow((x, y): (f64, f64), (w, h): (f64, f64), (cw, ch): (f64, f64), work: Rect, widgets: &[Rect]) -> Rect {
+    let inside = |x: f64, y: f64| Rect { x: x.min(work.right() - EDGE - w).max(work.x), y: y.min(work.bottom() - EDGE - h).max(work.y), w, h };
+    let ways = [inside(x, y), inside(x + cw - w, y), inside(x, y + ch - h), inside(x + cw - w, y + ch - h)];
+    ways.into_iter().find(|way| clear(way, widgets)).unwrap_or(ways[0])
+}
+
+// Whether a card keeps the grid's gap from each of the system's widgets, give or take a point.
+fn clear(r: &Rect, widgets: &[Rect]) -> bool {
+    let apart = |start: f64, end: f64, from: f64, to: f64| end + GAP - 1.0 <= from || to + GAP - 1.0 <= start;
+    widgets.iter().all(|w| apart(r.x, r.right(), w.x, w.right()) || apart(r.y, r.bottom(), w.y, w.bottom()))
+}
+
+// Where a card `size` big dropped at `from` makes its home on `desk`: the grid's place for the compact
+// card that is clear of the system's widgets and nearest the drop, measured from where the card then
+// shows at `size`. Where no place is clear, the grid's place nearest the card as dropped, over them.
+fn place(from: Rect, size: (f64, f64), compact: (f64, f64), desk: Rect, work: Rect, widgets: &[Rect]) -> (f64, f64) {
+    let across: Vec<_> = widgets.iter().map(|r| (r.x, r.right())).collect();
+    let down: Vec<_> = widgets.iter().map(|r| (r.y, r.bottom())).collect();
+    let (cw, ch) = compact;
+    let xs = stops(desk.x, desk.right(), cw, &lines(&across, cw));
+    let ys = stops(desk.y, desk.bottom(), ch, &lines(&down, ch));
+    let nearest = xs
+        .iter()
+        .flat_map(|&x| ys.iter().map(move |&y| (x, y)))
+        .filter(|&(x, y)| clear(&Rect { x, y, w: cw, h: ch }, widgets))
+        .map(|home| {
+            let shown = if size == compact { Rect { x: home.0, y: home.1, w: cw, h: ch } } else { grow(home, size, compact, work, widgets) };
+            (home, (shown.x - from.x).hypot(shown.y - from.y))
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1));
+    if let Some((home, _)) = nearest {
+        return home;
+    }
+    let (w, h) = size;
+    (snap(from.x, desk.x, desk.right(), w, &lines(&across, w)), snap(from.y, desk.y, desk.bottom(), h, &lines(&down, h)))
+}
+
+// The lines a card `length` long may settle on along one side of the desktop, from `start` to `end`: the
+// grid's, counted in from either edge, and `lines`, which put it flush with the system's widgets. None
+// where it is longer than the side.
+fn stops(start: f64, end: f64, length: f64, lines: &[f64]) -> Vec<f64> {
     let min = start + EDGE;
     let max = end - EDGE - length;
     if max < min {
-        return value.min(end - length).max(start);
+        return Vec::new();
     }
     let steps = ((max - min) / PITCH).floor() as i32;
     (0..=steps)
         .flat_map(|k| [min + k as f64 * PITCH, max - k as f64 * PITCH])
         .chain(lines.iter().copied().filter(|line| (min..=max).contains(line)))
+        .collect()
+}
+
+// Where a card `length` long settles along one side of the desktop: the closest of its stops.
+fn snap(value: f64, start: f64, end: f64, length: f64, lines: &[f64]) -> f64 {
+    stops(start, end, length, lines)
+        .into_iter()
         .min_by(|a, b| (a - value).abs().total_cmp(&(b - value).abs()))
-        .unwrap_or(min)
+        .unwrap_or_else(|| value.min(end - length).max(start))
 }
 
 // Lines along one side that put a card `length` long flush with a system widget there: in line with
@@ -280,6 +342,7 @@ pub fn reveal(app: &AppHandle, window: WebviewWindow, w: f64, h: f64) {
     let size = clamp(w, h);
     let state = widget(app);
     *state.size.lock().unwrap() = size;
+    let compact = state.compact_for(size);
     let mut home = state.home.lock().unwrap();
     let start = match *home {
         // A saved corner is kept on whichever display it is on, pulled inside if it hangs off.
@@ -287,14 +350,18 @@ pub fn reveal(app: &AppHandle, window: WebviewWindow, w: f64, h: f64) {
             let a = area_of(&window, x, y);
             (x.min(a.right() - size.0).max(a.x), y.min(a.bottom() - size.1).max(a.y))
         }
-        // First run: the primary display's top-right corner.
+        // First run: the primary display's top-right corner, or the place nearest it clear of the
+        // system's widgets.
         None => match primary_area(&window) {
-            Some(a) => (a.right() - size.0 - EDGE, a.y + EDGE),
+            Some(a) => {
+                let corner = Rect { x: a.right() - size.0 - EDGE, y: a.y + EDGE, w: size.0, h: size.1 };
+                place(corner, size, compact, desktop_of(&window, a), a, &system_widgets())
+            }
             None => (EDGE, EDGE),
         },
     };
     *home = Some(start);
-    let rect = target(&window, start, size);
+    let rect = target(&window, start, size, compact);
     drop(home);
     // Opened by hand, the widget comes forward, or it would start under whatever is open; at login
     // it goes straight onto the desktop.
@@ -475,6 +542,7 @@ pub fn morph(app: &AppHandle, window: WebviewWindow, w: f64, h: f64, start: f64,
     let state = widget(app);
     let size = clamp(w, h);
     *state.size.lock().unwrap() = size;
+    let compact = state.compact_for(size);
     // Mid-drag the drag owns the position, and the home corner is stale until the drop.
     if state.dragging.load(Ordering::Relaxed) {
         let _ = window.clone().run_on_main_thread(move || {
@@ -485,7 +553,7 @@ pub fn morph(app: &AppHandle, window: WebviewWindow, w: f64, h: f64, start: f64,
     let Some(home) = *state.home.lock().unwrap() else { return };
     let Some(from) = current(&window) else { return };
     let ms = if state.morph.load(Ordering::Relaxed) { ms } else { 0.0 };
-    animate(app, window.clone(), from, target(&window, home, size), start, ms, MORPH);
+    animate(app, window.clone(), from, target(&window, home, size, compact), start, ms, MORPH);
 }
 
 /// The page asks for this when a press lands on anything that is not a control. Once the pointer
@@ -535,16 +603,16 @@ fn apart(a: Option<(f64, f64)>, b: Option<(f64, f64)>) -> bool {
 pub(crate) fn settle(app: &AppHandle, window: WebviewWindow) {
     let state = widget(app);
     let Some(from) = current(&window) else { return };
-    let (w, h) = *state.size.lock().unwrap();
-    let desk = desktop_of(&window, area_of(&window, from.x + from.w / 2.0, from.y + from.h / 2.0));
+    let size = *state.size.lock().unwrap();
+    let compact = *state.compact.lock().unwrap();
+    let work = area_of(&window, from.x + from.w / 2.0, from.y + from.h / 2.0);
     let widgets = system_widgets();
-    let across: Vec<_> = widgets.iter().map(|r| (r.x, r.right())).collect();
-    let down: Vec<_> = widgets.iter().map(|r| (r.y, r.bottom())).collect();
-    let x = snap(from.x, desk.x, desk.right(), w, &lines(&across, w));
-    let y = snap(from.y, desk.y, desk.bottom(), h, &lines(&down, h));
-    *state.home.lock().unwrap() = Some((x, y));
+    let home = place(from, size, compact, desktop_of(&window, work), work, &widgets);
+    *state.home.lock().unwrap() = Some(home);
     state.save();
-    animate(app, window, from, Rect { x, y, w, h }, now_ms(), GLIDE_MS, GLIDE);
+    // The compact card sits just where it is put, the Dock's place included, as the system's widgets do.
+    let to = if size == compact { Rect { x: home.0, y: home.1, w: size.0, h: size.1 } } else { grow(home, size, compact, work, &widgets) };
+    animate(app, window, from, to, now_ms(), GLIDE_MS, GLIDE);
 }
 
 /// A cubic Bézier easing, as CSS writes one: (x1, y1, x2, y2).
@@ -738,9 +806,38 @@ pub fn dress(window: &WebviewWindow) {
                 layer.setMasksToBounds(true);
             }
         }
+        untile(ns);
     }
     crate::glass::round_window(window, RADIUS);
     let _ = window.set_shadow(true);
+}
+
+/// The system's window tiling (macOS 15 on) moves a window dropped with the pointer at a screen edge
+/// into that half of the screen: once the button is up, it asks the window to go there. The widget
+/// declines, as its place is the grid's. Taken, the request carried the widget off the grid just after it landed there,
+/// while the place it saved stayed where it had landed.
+#[cfg(target_os = "macos")]
+fn untile(ns: &objc2_app_kit::NSWindow) {
+    use objc2::runtime::{AnyObject, Bool, Imp, Sel};
+    extern "C-unwind" fn decline(_: &AnyObject, _: Sel, _geometry: *mut AnyObject, _springs: *mut AnyObject, done: *mut block2::Block<dyn Fn(Bool)>) {
+        // SAFETY: the window manager's completion block, which takes whether the window resized.
+        if let Some(done) = unsafe { done.as_ref() } {
+            done.call((Bool::NO,));
+        }
+    }
+    // On tao's window class, under the subclass key-value observing puts over it.
+    let mut class = ns.class();
+    while class.name().to_bytes().starts_with(b"NSKVONotifying_") {
+        let Some(parent) = class.superclass() else { return };
+        class = parent;
+    }
+    let sel = objc2::sel!(_resizeFromWindowManagerWithTargetGeometry:springSettings:completion:);
+    // SAFETY: the method takes (id, id, block) and returns nothing, as `decline` does; a system without
+    // tiling never sends it.
+    unsafe {
+        let imp = std::mem::transmute::<extern "C-unwind" fn(&AnyObject, Sel, *mut AnyObject, *mut AnyObject, *mut block2::Block<dyn Fn(Bool)>), Imp>(decline);
+        objc2::ffi::class_replaceMethod(class as *const _ as *mut _, sel, imp, c"v40@0:8@16@24@?32".as_ptr());
+    }
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -824,6 +921,67 @@ mod tests {
         assert_eq!(snap(690.0, 0.0, 1680.0, 344.0, &near), 680.0);
         // In line with its left edge.
         assert_eq!(snap(505.0, 0.0, 1680.0, 344.0, &near), 500.0);
+    }
+
+    // The desktop the user measured on 2026-10-17: 1470 by 956, a 33pt menu bar, the Dock below 880,
+    // and three of the system's widgets down the left: two small ones and a medium one under them.
+    const DESK: Rect = Rect { x: 0.0, y: 33.0, w: 1470.0, h: 923.0 };
+    const WORK: Rect = Rect { x: 0.0, y: 33.0, w: 1470.0, h: 847.0 };
+    const THEIRS: [Rect; 3] = [
+        Rect { x: 16.0, y: 49.0, w: 164.0, h: 164.0 },
+        Rect { x: 196.0, y: 49.0, w: 164.0, h: 164.0 },
+        Rect { x: 16.0, y: 229.0, w: 344.0, h: 164.0 },
+    ];
+    const COMPACT: (f64, f64) = (344.0, 324.0);
+
+    #[test]
+    fn keeps_a_gap_from_system_widgets() {
+        let card = |x: f64, y: f64| Rect { x, y, w: 344.0, h: 324.0 };
+        // A gap past the medium widget's right edge, and a gap under it.
+        assert!(clear(&card(376.0, 229.0), &THEIRS));
+        assert!(clear(&card(16.0, 409.0), &THEIRS));
+        // Over it, and closer than a gap.
+        assert!(!clear(&card(16.0, 229.0), &THEIRS));
+        assert!(!clear(&card(370.0, 229.0), &THEIRS));
+    }
+
+    #[test]
+    fn rests_clear_of_system_widgets() {
+        let at = |x: f64, y: f64| Rect { x, y, w: 344.0, h: 324.0 };
+        // Dropped on the medium widget: under it, the nearest place clear of it.
+        assert_eq!(place(at(16.0, 229.0), COMPACT, COMPACT, DESK, WORK, &THEIRS), (16.0, 409.0));
+        // Dropped on the small ones: beside them, a step to the right.
+        assert_eq!(place(at(150.0, 50.0), COMPACT, COMPACT, DESK, WORK, &THEIRS), (376.0, 49.0));
+        // Where nothing is in the way, the grid's nearest place, as before.
+        assert_eq!(place(at(700.0, 300.0), COMPACT, COMPACT, DESK, WORK, &THEIRS), (736.0, 256.0));
+        assert_eq!(place(at(150.0, 40.0), COMPACT, COMPACT, DESK, WORK, &[]), (196.0, 49.0));
+    }
+
+    #[test]
+    fn grows_away_from_system_widgets() {
+        let room = Rect { x: 0.0, y: 0.0, w: 2000.0, h: 2000.0 };
+        let small = |x: f64, y: f64| Rect { x, y, w: 164.0, h: 164.0 };
+        let large = (440.0, 600.0);
+        let home = (500.0, 700.0);
+        let grown = |widgets: &[Rect]| {
+            let r = grow(home, large, COMPACT, room, widgets);
+            (r.x, r.y)
+        };
+        // Nothing in the way: to the right and down.
+        assert_eq!(grown(&[]), (500.0, 700.0));
+        // A widget to the right: to the left, the compact card's right edge kept.
+        assert_eq!(grown(&[small(900.0, 700.0)]), (404.0, 700.0));
+        // A widget below as well: up and to the left, its bottom right corner kept.
+        assert_eq!(grown(&[small(900.0, 700.0), small(500.0, 1200.0)]), (404.0, 424.0));
+        // Hemmed in all round: to the right and down, over them while large.
+        assert_eq!(grown(&[small(900.0, 700.0), small(500.0, 1200.0), small(300.0, 450.0), small(700.0, 450.0)]), (500.0, 700.0));
+    }
+
+    #[test]
+    fn a_large_card_dropped_rests_where_it_shows_near_the_drop() {
+        // Dropped large just right of the small widgets, where growing to the right and down is clear.
+        let dropped = Rect { x: 380.0, y: 55.0, w: 440.0, h: 600.0 };
+        assert_eq!(place(dropped, (440.0, 600.0), COMPACT, DESK, WORK, &THEIRS), (376.0, 49.0));
     }
 
     #[test]
