@@ -259,12 +259,17 @@ fn target(window: &WebviewWindow, home: (f64, f64), size: (f64, f64), compact: (
     grow(home, size, compact, work, &widgets)
 }
 
+// The compact card sits just at its home, the Dock's place included, as the system's widgets do: pushed
+// above the Dock after a larger state or a restart, it stood 49pt higher than where it was dropped.
 // A card larger than the compact one grows from the home corner to the right and down. Where that would
 // cover one of the system's widgets, it grows from whichever other corner of the compact card keeps clear
 // of them, to the left, then up, then both, as a menu opens away from a screen's edge; where none does, to
 // the right and down, over them for as long as it is large. Each way is pushed back inside the work
 // area's margin, under the Dock for one.
 fn grow((x, y): (f64, f64), (w, h): (f64, f64), (cw, ch): (f64, f64), work: Rect, widgets: &[Rect]) -> Rect {
+    if (w, h) == (cw, ch) {
+        return Rect { x, y, w, h };
+    }
     let inside = |x: f64, y: f64| Rect { x: x.min(work.right() - EDGE - w).max(work.x), y: y.min(work.bottom() - EDGE - h).max(work.y), w, h };
     let ways = [inside(x, y), inside(x + cw - w, y), inside(x, y + ch - h), inside(x + cw - w, y + ch - h)];
     ways.into_iter().find(|way| clear(way, widgets)).unwrap_or(ways[0])
@@ -277,8 +282,11 @@ fn clear(r: &Rect, widgets: &[Rect]) -> bool {
 }
 
 // Where a card `size` big dropped at `from` makes its home on `desk`: the grid's place for the compact
-// card that is clear of the system's widgets and nearest the drop, measured from where the card then
-// shows at `size`. Where no place is clear, the grid's place nearest the card as dropped, over them.
+// card that is clear of the system's widgets and nearest the drop, measured both from where the card
+// then shows at `size` and from the home itself. A large card is pushed above the Dock from any home low
+// enough, and by the first alone the home went to the lowest of those, so the compact card came back
+// far below where the large one had been. Where no place is clear, the grid's place nearest the card as
+// dropped, over them.
 fn place(from: Rect, size: (f64, f64), compact: (f64, f64), desk: Rect, work: Rect, widgets: &[Rect]) -> (f64, f64) {
     let across: Vec<_> = widgets.iter().map(|r| (r.x, r.right())).collect();
     let down: Vec<_> = widgets.iter().map(|r| (r.y, r.bottom())).collect();
@@ -290,8 +298,8 @@ fn place(from: Rect, size: (f64, f64), compact: (f64, f64), desk: Rect, work: Re
         .flat_map(|&x| ys.iter().map(move |&y| (x, y)))
         .filter(|&(x, y)| clear(&Rect { x, y, w: cw, h: ch }, widgets))
         .map(|home| {
-            let shown = if size == compact { Rect { x: home.0, y: home.1, w: cw, h: ch } } else { grow(home, size, compact, work, widgets) };
-            (home, (shown.x - from.x).hypot(shown.y - from.y))
+            let shown = grow(home, size, compact, work, widgets);
+            (home, (shown.x - from.x).hypot(shown.y - from.y) + (home.0 - from.x).hypot(home.1 - from.y))
         })
         .min_by(|a, b| a.1.total_cmp(&b.1));
     if let Some((home, _)) = nearest {
@@ -345,10 +353,10 @@ pub fn reveal(app: &AppHandle, window: WebviewWindow, w: f64, h: f64) {
     let compact = state.compact_for(size);
     let mut home = state.home.lock().unwrap();
     let start = match *home {
-        // A saved corner is kept on whichever display it is on, pulled inside if it hangs off.
+        // A saved corner is kept on whichever display it is on, pulled onto its desktop if it hangs off.
         Some((x, y)) => {
-            let a = area_of(&window, x, y);
-            (x.min(a.right() - size.0).max(a.x), y.min(a.bottom() - size.1).max(a.y))
+            let d = desktop_of(&window, area_of(&window, x, y));
+            (x.min(d.right() - size.0).max(d.x), y.min(d.bottom() - size.1).max(d.y))
         }
         // First run: the primary display's top-right corner, or the place nearest it clear of the
         // system's widgets.
@@ -610,9 +618,7 @@ pub(crate) fn settle(app: &AppHandle, window: WebviewWindow) {
     let home = place(from, size, compact, desktop_of(&window, work), work, &widgets);
     *state.home.lock().unwrap() = Some(home);
     state.save();
-    // The compact card sits just where it is put, the Dock's place included, as the system's widgets do.
-    let to = if size == compact { Rect { x: home.0, y: home.1, w: size.0, h: size.1 } } else { grow(home, size, compact, work, &widgets) };
-    animate(app, window, from, to, now_ms(), GLIDE_MS, GLIDE);
+    animate(app, window, from, grow(home, size, compact, work, &widgets), now_ms(), GLIDE_MS, GLIDE);
 }
 
 /// A cubic Bézier easing, as CSS writes one: (x1, y1, x2, y2).
@@ -982,6 +988,52 @@ mod tests {
         // Dropped large just right of the small widgets, where growing to the right and down is clear.
         let dropped = Rect { x: 380.0, y: 55.0, w: 440.0, h: 600.0 };
         assert_eq!(place(dropped, (440.0, 600.0), COMPACT, DESK, WORK, &THEIRS), (376.0, 49.0));
+        // Dropped large as low as it goes, where the Dock pushes it up from any home below: the home
+        // is the nearest place to it, not the lowest of those.
+        let low = Rect { x: 736.0, y: 264.0, w: 440.0, h: 600.0 };
+        assert_eq!(place(low, (440.0, 600.0), COMPACT, DESK, WORK, &THEIRS), (736.0, 256.0));
+    }
+
+    #[test]
+    fn the_compact_card_stays_where_it_rests() {
+        // On the bottom row, partly over the Dock's place: there, not pushed above the Dock.
+        assert_eq!(grow((736.0, 616.0), COMPACT, COMPACT, WORK, &THEIRS), Rect { x: 736.0, y: 616.0, w: 344.0, h: 324.0 });
+        // Large from there, it is pushed above the Dock.
+        assert_eq!(grow((736.0, 616.0), (440.0, 600.0), COMPACT, WORK, &[]).y, 264.0);
+    }
+
+    // Random desktops, displays to the left too, short work areas and up to eight of the system's widgets:
+    // never a number that isn't one, the compact card on the desktop and clear of them wherever the grid
+    // has room, and a large card inside the work area's margin wherever that is tall and wide enough.
+    #[test]
+    fn places_sensibly_on_any_desktop() {
+        let mut seed: u64 = 42;
+        let mut rnd = move || { seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407); (seed >> 11) as f64 / (1u64 << 53) as f64 };
+        let mut fails = 0;
+        for case in 0..5000 {
+            let w = 800.0 + rnd() * 2400.0; let h = 600.0 + rnd() * 1300.0; let bar = 24.0 + rnd() * 20.0; let dock = if rnd() < 0.5 { 0.0 } else { 50.0 + rnd() * 60.0 };
+            let x0 = if rnd() < 0.3 { -w } else { 0.0 };
+            let desk = Rect { x: x0, y: bar, w, h: h - bar };
+            let work = Rect { x: x0, y: bar, w, h: h - bar - dock };
+            let n = (rnd() * 8.0) as usize;
+            let widgets: Vec<Rect> = (0..n).map(|_| { let s = if rnd() < 0.5 { (164.0, 164.0) } else if rnd() < 0.5 { (344.0, 164.0) } else { (344.0, 344.0) }; Rect { x: x0 + 16.0 + (rnd() * (w - 200.0)).floor(), y: bar + 16.0 + (rnd() * (h - 300.0)).floor(), w: s.0, h: s.1 } }).collect();
+            let compact = (344.0, 320.0 + (rnd() * 60.0).floor());
+            let size = if rnd() < 0.5 { compact } else { (440.0, 600.0) };
+            let from = Rect { x: x0 - 400.0 + rnd() * (w + 800.0), y: rnd() * h, w: size.0, h: size.1 };
+            let home = place(from, size, compact, desk, work, &widgets);
+            let shown = grow(home, size, compact, work, &widgets);
+            let finite = [home.0, home.1, shown.x, shown.y].iter().all(|v| v.is_finite());
+            let rest = Rect { x: home.0, y: home.1, w: compact.0, h: compact.1 };
+            // Some clear place exists on the grid?
+            let any = stops(desk.x, desk.right(), compact.0, &[]).iter().any(|&x| stops(desk.y, desk.bottom(), compact.1, &[]).iter().any(|&y| clear(&Rect { x, y, w: compact.0, h: compact.1 }, &widgets)));
+            let on_desk = rest.x >= desk.x - 0.01 && rest.right() <= desk.right() + 0.01 && rest.y >= desk.y - 0.01 && rest.bottom() <= desk.bottom() + 0.01;
+            let large_inside = size == compact || (shown.x >= work.x - 0.01 && shown.y >= work.y - 0.01 && (shown.right() <= work.right() - EDGE + 0.01 || shown.w + EDGE > work.w) && (shown.bottom() <= work.bottom() - EDGE + 0.01 || shown.h + EDGE > work.h));
+            if !finite || (any && !clear(&rest, &widgets)) || !on_desk || !large_inside {
+                fails += 1;
+                if fails < 6 { eprintln!("case {case}: finite {finite} any {any} clear {} on_desk {on_desk} large_inside {large_inside} desk {desk:?} work {work:?} from {from:?} size {size:?} home {home:?} shown {shown:?} widgets {widgets:?}", clear(&rest, &widgets)); }
+            }
+        }
+        assert_eq!(fails, 0);
     }
 
     #[test]
