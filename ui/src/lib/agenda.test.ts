@@ -73,6 +73,20 @@ describe('agenda', () => {
     expect(upcomingEvents(data(), now)[0]?.title).toBe('Lecture');
   });
 
+  it('marks each day a timed event runs over, and not the day it ends at midnight', () => {
+    const d = emptyData('zh');
+    d.feeds = [{ id: 'f', name: 'Uni', host: 'x', lastSync: null, error: null }];
+    d.feedEvents = {
+      f: [
+        { key: 'conf', title: 'Conference', start: new Date(2026, 8, 21, 9).toISOString(), end: new Date(2026, 8, 23, 17).toISOString(), allDay: false, location: '' },
+        { key: 'late', title: 'Late', start: new Date(2026, 8, 25, 22).toISOString(), end: new Date(2026, 8, 26).toISOString(), allDay: false, location: '' },
+      ],
+    };
+    const marks = monthMarks(d, monthGrid(now));
+    expect(['2026-09-20', '2026-09-21', '2026-09-22', '2026-09-23', '2026-09-24'].map((k) => marks.get(k)?.events ?? 0)).toEqual([0, 1, 1, 1, 0]);
+    expect(['2026-09-25', '2026-09-26'].map((k) => marks.get(k)?.events ?? 0)).toEqual([1, 0]);
+  });
+
   it('spreads multi-day all-day events over each day they cover', () => {
     const marks = monthMarks(data(), monthGrid(now));
     expect(['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01'].map((k) => marks.get(k)?.events ?? 0)).toEqual([1, 1, 1, 0]);
