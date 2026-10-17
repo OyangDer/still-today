@@ -7,6 +7,20 @@ const cal = (body: string) => `BEGIN:VCALENDAR\r\nVERSION:2.0\r\nX-WR-CALNAME:Un
 const local = (iso: string) => new Date(iso).toLocaleString('sv-SE', { timeZone: 'Australia/Sydney' });
 
 describe('parseFeed', () => {
+  it('leaves out an event no date can hold, and keeps the rest of the feed', () => {
+    const feed = parseFeed(
+      cal(
+        [
+          'BEGIN:VEVENT', 'UID:bad', 'DTSTART:20261020T090000Z', 'DURATION:P99999999D', 'SUMMARY:Broken', 'END:VEVENT',
+          'BEGIN:VEVENT', 'UID:good', 'DTSTART:20261021T090000Z', 'DTEND:20261021T100000Z', 'SUMMARY:Lecture', 'END:VEVENT',
+        ].join('\r\n'),
+      ),
+      ...range,
+      false,
+    );
+    expect(feed.events.map((e) => e.title)).toEqual(['Lecture']);
+  });
+
   it('reads UTC events, folded lines and escapes, and leaves Canvas assignment copies to the API', () => {
     const feed = parseFeed(
       cal(

@@ -464,11 +464,14 @@ export function parseFeed(text: string, rangeStart: Date, rangeEnd: Date, skipAs
       }
     } else if (e.end) {
       endMs = startMs + (instant(e.end, zones) - instant(e.start, zones));
-      end = new Date(endMs).toISOString();
     } else if (e.durationMs !== null) {
       endMs = startMs + e.durationMs;
-      end = new Date(endMs).toISOString();
     }
+    // An event with a time no date can hold (a duration of 99999999 days, say) is left out: it threw,
+    // and the whole feed failed at every sync.
+    const valid = (ms: number) => Number.isFinite(ms) && Math.abs(ms) <= 8.64e15;
+    if (!valid(startMs) || (endMs !== null && !valid(endMs))) return;
+    if (!allDay && endMs !== null) end = new Date(endMs).toISOString();
     const lastMs = endMs ?? startMs + (allDay ? 86400000 : 0);
     if (lastMs < from || startMs > to) return;
     // Feeds do reuse a UID (exports that number nothing, say); the list keys rows by it, so a repeat
