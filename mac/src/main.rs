@@ -68,6 +68,10 @@ fn read_or_null(path: &Path) -> Value {
 // Write-then-replace, as host/Store.cs: the new bytes reach the disk before the swap, and with a
 // `backup` path the version replaced stays there.
 pub fn write_atomic(path: &Path, content: &str, backup: Option<&Path>) -> std::io::Result<()> {
+    // One write at a time: two at once shared the temporary file, and one could swap in the other's
+    // half-written bytes.
+    static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _one = WRITING.lock().unwrap_or_else(|e| e.into_inner());
     let mut temp = path.as_os_str().to_owned();
     temp.push(".tmp");
     let temp = PathBuf::from(temp);
@@ -434,8 +438,11 @@ fn own_page(url: &Url) -> bool {
 }
 
 fn main() {
+    // Never in a demo: run from a downloaded copy, it would install itself over the real widget.
     #[cfg(target_os = "macos")]
-    install::relocate();
+    if !demo() {
+        install::relocate();
+    }
     // After an update the Keychain asks before it hands over the token, and the boot call waits on that.
     // A hidden page left waiting that long never takes the reply until something runs in it, so the
     // widget would never appear: the question is asked here instead, before there is a page.
