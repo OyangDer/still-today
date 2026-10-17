@@ -64,7 +64,29 @@ pub async fn school_search(name: &str) -> Reply {
 
 pub async fn feed_get(url: Url) -> Reply {
     let request = PLAIN.get(url.clone()).header(ACCEPT, "text/calendar, text/plain;q=0.8, */*;q=0.5");
-    send(request, &url).await
+    send_as(request, &url, unfold).await
+}
+
+// A calendar's folded lines joined again before the text is read as UTF-8: a fold may fall inside a
+// character (some feeds count 75 bytes, not characters), and decoded first, a Chinese title split there
+// came out as replacement marks. The page unfolds what is left, which is nothing.
+fn unfold(bytes: &[u8]) -> String {
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let fold = match bytes[i] {
+            b'\r' if bytes.get(i + 1) == Some(&b'\n') && matches!(bytes.get(i + 2), Some(b' ' | b'\t')) => 3,
+            b'\n' if matches!(bytes.get(i + 1), Some(b' ' | b'\t')) => 2,
+            _ => 0,
+        };
+        if fold > 0 {
+            i += fold;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 /// An image as a data: URL, the only kind the page's CSP lets it show; None when none arrives.
@@ -80,6 +102,10 @@ pub async fn image_get(url: Url) -> Option<String> {
 }
 
 async fn send(request: RequestBuilder, origin: &Url) -> Reply {
+    send_as(request, origin, |bytes| String::from_utf8_lossy(bytes).into_owned()).await
+}
+
+async fn send_as(request: RequestBuilder, origin: &Url, text: fn(&[u8]) -> String) -> Reply {
     // Error text can echo the request URL, which may carry a secret; report only a code.
     let Ok(response) = request.send().await else { return Reply::code(-1) };
     let status = response.status().as_u16() as i32;
@@ -88,7 +114,7 @@ async fn send(request: RequestBuilder, origin: &Url) -> Reply {
     }
     let next = next_page(&response, origin);
     match read_bounded(response).await {
-        Ok(Some(bytes)) => Reply { status, body: Some(String::from_utf8_lossy(&bytes).into_owned()), next },
+        Ok(Some(bytes)) => Reply { status, body: Some(text(&bytes)), next },
         Ok(None) => Reply::code(-2),
         Err(_) => Reply::code(-1),
     }
@@ -130,4 +156,19 @@ fn next_page(response: &Response, origin: &Url) -> Option<String> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unfolds_inside_a_character() {
+        // 第三周, folded after the first byte of 周, as a 75-byte fold can fall.
+        let mut feed = b"SUMMARY:\xe7\xac\xac\xe4\xb8\x89\xe5\r\n \x91\xa8\r\nEND:VEVENT".to_vec();
+        assert_eq!(unfold(&feed), "SUMMARY:第三周\r\nEND:VEVENT");
+        // Bare line feeds, and a tab as the fold's space.
+        feed = b"A\n\tB\nC".to_vec();
+        assert_eq!(unfold(&feed), "AB\nC");
+    }
 }
