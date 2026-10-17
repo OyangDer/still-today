@@ -23,13 +23,16 @@
     padding: 2px 12px 6px 10px;
   }
 
+  /* A capsule, as the widget's other buttons are; its rounder ends take a little more room, which the
+     margin gives back, so the chevron stays where it was. */
   .back {
     display: inline-flex;
     align-items: center;
     gap: 2px;
     height: 30px;
-    padding: 0 10px 0 4px;
-    border-radius: 8px;
+    margin-left: -2px;
+    padding: 0 12px 0 6px;
+    border-radius: 999px;
     font-weight: 600;
     color: var(--ink);
     transition: background-color var(--t-micro);
