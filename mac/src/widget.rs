@@ -533,9 +533,14 @@ pub fn set_topmost(app: &AppHandle, window: WebviewWindow, on: bool) {
 /// Settings. A desktop widget goes back under them once the user moves on.
 pub fn present(app: &AppHandle, window: &WebviewWindow) {
     let state = widget(app);
-    state.presented.store(!state.topmost(), Ordering::Relaxed);
+    let topmost = state.topmost();
+    state.presented.store(!topmost, Ordering::Relaxed);
     let _ = window.show();
-    let _ = window.set_always_on_bottom(false);
+    // Kept on top, it is over other windows already: brought to the normal level here, it stayed
+    // there, under the next window opened, though Settings still said it was kept on top.
+    if !topmost {
+        let _ = window.set_always_on_bottom(false);
+    }
     let _ = window.set_focus();
 }
 
@@ -567,9 +572,17 @@ pub fn morph(app: &AppHandle, window: WebviewWindow, w: f64, h: f64, start: f64,
 /// The page asks for this when a press lands on anything that is not a control. Once the pointer
 /// comes to rest, or the button comes up, the widget glides onto the grid.
 pub fn drag(app: &AppHandle, window: WebviewWindow) {
-    widget(app).dragging.store(true, Ordering::Relaxed);
+    let state = widget(app);
+    state.dragging.store(true, Ordering::Relaxed);
+    // A glide or morph still under way stops, at the size it was heading for: left running, it went on
+    // moving the window under the drag.
+    state.animation.fetch_add(1, Ordering::SeqCst);
+    let size = *state.size.lock().unwrap();
     let moving = window.clone();
     let _ = window.run_on_main_thread(move || {
+        if let Some(r) = current(&moving).filter(|r| (r.w, r.h) != size) {
+            put(&moving, Rect { w: size.0, h: size.1, ..r });
+        }
         let _ = moving.start_dragging();
     });
     let app = app.clone();
