@@ -1,8 +1,8 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { app } from '../lib/state.svelte';
-  import { t } from '../lib/i18n';
-  import { dayKey, fromDayKey, parseIso } from '../lib/time';
+  import { shortDate, t } from '../lib/i18n';
+  import { atMinutes, dayKey, daysBetween, fromDayKey, parseIso, startOfDay } from '../lib/time';
   import { fade } from '../lib/motion';
   import DateField from '../components/DateField.svelte';
   import PageHeader from '../components/PageHeader.svelte';
@@ -17,13 +17,17 @@
   const existing = untrack(() => (id ? $state.snapshot(app.data.events[id]) : null));
   const from = existing && !existing.allDay ? parseIso(existing.start) : null;
   const to = existing && !existing.allDay ? parseIso(existing.end) : null;
+  // An event past midnight keeps the days it spans: the fields set its start day and the hours, and
+  // the end lands that many days on. Read as one day, 22:00–01:00 saved untouched came back 22:00–23:00.
+  const endDays = from && to ? Math.max(0, daysBetween(from, to)) : 0;
   // A new event starts at the next whole hour when it is for today, otherwise at 09:00.
   const nextHour = app.now.getHours() + 1;
   const isToday = initialDay === dayKey(app.now);
   const minutes = (d: Date) => d.getHours() * 60 + d.getMinutes();
 
   let title = $state(existing?.title ?? '');
-  let date = $state<Date | null>(fromDayKey(initialDay));
+  // An event opens on its own start day, though one over several days is listed on each of them.
+  let date = $state<Date | null>(from ? startOfDay(from) : fromDayKey(initialDay));
   let allDay = $state(existing?.allDay ?? false);
   let start = $state(from ? minutes(from) : (isToday && nextHour < 23 ? nextHour : 9) * 60);
   let end = $state(to ? minutes(to) : (isToday && nextHour < 23 ? nextHour + 1 : 10) * 60);
@@ -32,12 +36,9 @@
 
   $effect(() => {
     // Moving the start keeps the length the user set; a start past the end drags the end along.
-    if (end <= start) end = Math.min(start + 60, 1439);
+    // An end on a later day is after any start.
+    if (endDays === 0 && end <= start) end = Math.min(start + 60, 1439);
   });
-
-  function at(d: Date, minutes: number): Date {
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), Math.floor(minutes / 60), minutes % 60);
-  }
 
   // The page takes clicks and keys while it slides away, so a double click or a held Enter reached
   // Save again and made a second event: it saves once.
@@ -50,7 +51,7 @@
       return;
     }
     if (!date) return;
-    if (!allDay && end <= start) {
+    if (!allDay && endDays === 0 && end <= start) {
       error = t('event.order');
       return;
     }
@@ -61,8 +62,8 @@
       app.saveEvent({
         id,
         title: title.trim(),
-        start: at(date, start).toISOString(),
-        end: at(date, end).toISOString(),
+        start: atMinutes(date, start).toISOString(),
+        end: atMinutes(date, end, endDays).toISOString(),
         allDay: false,
         location: location.trim(),
       });
@@ -103,6 +104,7 @@
         <span class="dash">–</span>
         <TimeField bind:value={end} disabled={allDay} />
       </div>
+      {#if endDays > 0 && !allDay && date}<span class="hint">{t('event.ends', { d: shortDate(atMinutes(date, 0, endDays)) })}</span>{/if}
       <div class="toggle-wrap"><Toggle bind:checked={allDay} label={t('event.allDay')} /></div>
     </div>
 

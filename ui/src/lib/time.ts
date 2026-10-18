@@ -32,6 +32,11 @@ export function daysBetween(a: Date, b: Date): number {
   return Math.round((startOfDay(b).getTime() - startOfDay(a).getTime()) / DAY);
 }
 
+/** `minutes` past midnight on the local day `days` after `d`'s. */
+export function atMinutes(d: Date, minutes: number, days = 0): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days, Math.floor(minutes / 60), minutes % 60);
+}
+
 export function hhmm(d: Date): string {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
