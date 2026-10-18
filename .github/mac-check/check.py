@@ -8,6 +8,7 @@ there), which is how it is debugged without a Mac.
 import glob
 import json
 import os
+import platform
 import socket
 import subprocess
 import sys
@@ -135,6 +136,10 @@ def views(probe):
     check(not found["spill"], "settings: text stays inside the card", "; ".join(found["spill"]))
     if found["cut"]:
         note("settings: cut short with …", "; ".join(found["cut"]))
+    # Airy or Mist is a choice of Liquid Glass, under Aura.
+    picker = probe.js("return [...document.querySelectorAll('.settings .line > span')].some(s => /^(玻璃|Glass)$/.test(s.textContent.trim()))")
+    want = bool(boot.get("liquid")) and theme_name == "aura"
+    check(picker == want, f"settings: the glass choice {'shows' if want else 'stays hidden'}", f"shown {picker}")
     stray.update(probe.js(WINDOWS_WORDS))
     shot(probe, f"{theme_name}-settings")
     probe.js("document.querySelector('.view.page .scroll, .view.page').scrollTop = 99999;")
@@ -154,7 +159,13 @@ time.sleep(1.5)
 boot = probe.call("boot")
 state = probe.native("state")
 work = state["work"]
-note("system", f"scale {state['scale']}, work area {work}, glass {boot.get('glass')}, platform {boot.get('platform')}")
+version = platform.mac_ver()[0]
+note("system", f"macOS {version or '-'}, scale {state['scale']}, work area {work}, glass {boot.get('glass')}, "
+     f"Liquid Glass {boot.get('liquid')}, platform {boot.get('platform')}")
+# Liquid Glass came with macOS 26; on 13 to 15 the widget takes the Popover material and Aura's own look.
+if MAC:
+    check(boot.get("liquid") == (int(version.split(".")[0]) >= 26), "Liquid Glass where the system has it",
+          f"macOS {version}, liquid {boot.get('liquid')}")
 
 # First run: the primary display's top-right corner, inside the margin.
 check(near(state["x"] + state["w"], work["x"] + work["w"] - MARGIN) and near(state["y"], work["y"] + MARGIN),

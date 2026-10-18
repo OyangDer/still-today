@@ -1,0 +1,102 @@
+"""Screenshots of the card in each look: Aura and the solid themes, with the system light and dark. On
+macOS 26 Aura is Liquid Glass, airy or Mist; on 13 to 15 it is the Popover material under Aura's
+Windows look, with the page's own tab pill. Runs after check.py against the same probe build; nothing
+here is checked. The shots, and what the page said about each look in looks.json, land in the folder
+given as the first argument.
+"""
+import json
+import os
+import socket
+import subprocess
+import sys
+import time
+
+SHOTS = sys.argv[1] if len(sys.argv) > 1 else "looks"
+
+# What the page draws by, for each look.
+PAGE = """
+const root = document.documentElement, cs = getComputedStyle(root);
+const vars = Object.fromEntries(['--scrim', '--aura-fill', '--sheen', '--edge', '--muted'].map(v => [v, cs.getPropertyValue(v).trim()]));
+const card = document.querySelector('.card');
+return { ...root.dataset, ...vars, card: card && getComputedStyle(card).backgroundColor,
+         pill: getComputedStyle(document.querySelector('.band .pill')).visibility };
+"""
+
+
+class Probe:
+    def __init__(self):
+        self.sock = socket.create_connection(("127.0.0.1", 9334), timeout=20)
+        self.lines = self.sock.makefile("r", encoding="utf-8")
+
+    def send(self, request):
+        self.sock.sendall((json.dumps(request) + "\n").encode())
+        return json.loads(self.lines.readline())
+
+    def js(self, body):
+        return self.send({"js": body}).get("r")
+
+
+def system_dark(on):
+    subprocess.run(["osascript", "-e", f'tell application "System Events" to tell appearance preferences to set dark mode to {str(on).lower()}'],
+                   check=False)
+
+
+def look(probe, aura, mode, glass=None):
+    """Aura on or off, the theme by its name, and with Liquid Glass airy or Mist, all from Settings."""
+    probe.js("document.querySelector('.back')?.click();")
+    time.sleep(0.6)
+    probe.js("document.querySelector('button.more').click();")
+    time.sleep(0.5)
+    probe.js("[...document.querySelectorAll('.menu button')].find(b => /设置|Settings/.test(b.textContent)).click();")
+    time.sleep(1.2)
+    probe.js(f"const a = document.querySelector('.toggle.aurora'); if ((a.getAttribute('aria-checked') === 'true') !== {str(aura).lower()}) a.click();")
+    time.sleep(0.3)
+    probe.js(f"[...document.querySelectorAll('.theme')].find(b => {mode}.test(b.querySelector('.theme-name').textContent.trim())).click();")
+    if glass:
+        time.sleep(0.3)
+        probe.js(f"[...document.querySelectorAll('.seg [role=radio]')].find(b => {glass}.test(b.textContent.trim()))?.click();")
+    time.sleep(0.8)
+    shown = probe.js("return [...document.querySelectorAll('.settings .line > span')].map(s => s.textContent.trim())")
+    probe.js("document.querySelector('.back')?.click();")
+    time.sleep(0.8)
+    return shown
+
+
+def shot(probe, name, pad=24):
+    s = probe.send({"native": "state"})
+    region = f"{s['x'] - pad:.0f},{s['y'] - pad:.0f},{s['w'] + 2 * pad:.0f},{s['h'] + 2 * pad:.0f}"
+    subprocess.run(["screencapture", "-x", "-R", region, os.path.join(SHOTS, f"{name}.png")], check=False)
+
+
+os.makedirs(SHOTS, exist_ok=True)
+probe = Probe()
+liquid = probe.js("return await window.__TAURI__.core.invoke('bridge', { m: 'boot', p: {} })").get("liquid")
+LIGHT, DARK, SYSTEM = "/^(浅色|Light)$/", "/^(深色|Dark)$/", "/^(跟随系统|System)$/"
+LOOKS = [
+    # (name, system dark, Aura, theme, glass)
+    ("aura-light", False, True, SYSTEM, "/^(通透|Airy)$/" if liquid else None),
+    ("aura-dark", True, True, SYSTEM, "/^(通透|Airy)$/" if liquid else None),
+    ("light", False, False, LIGHT, None),
+    ("dark", True, False, DARK, None),
+]
+if liquid:
+    LOOKS += [("mist-light", False, True, SYSTEM, "/^(柔雾|Mist)$/"), ("mist-dark", True, True, SYSTEM, "/^(柔雾|Mist)$/")]
+report = {"liquid": liquid}
+for name, dark, aura, mode, glass in LOOKS:
+    system_dark(dark)
+    time.sleep(2)
+    settings = look(probe, aura, mode, glass)
+    for i, view in ((0, "overview"), (2, "calendar")):
+        probe.js(f"document.querySelectorAll('[role=tab]')[{i}].click();")
+        time.sleep(1.2)
+        shot(probe, f"{name}-{view}")
+    report[name] = {"settings": settings, "page": probe.js(PAGE), "window": probe.send({"native": "state"})}
+    print(name, json.dumps(report[name]["page"]), flush=True)
+    probe.js("document.querySelectorAll('[role=tab]')[0].click();")
+    time.sleep(0.9)
+
+# Back to the default: Aura, following the system, which is light, airy where there is Liquid Glass.
+system_dark(False)
+time.sleep(1)
+look(probe, True, SYSTEM, "/^(通透|Airy)$/" if liquid else None)
+json.dump(report, open(os.path.join(SHOTS, "looks.json"), "w"), ensure_ascii=False, indent=1)

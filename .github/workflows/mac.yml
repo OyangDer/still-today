@@ -1,5 +1,6 @@
 # Builds the Mac app on a Mac runner: a universal .dmg (Apple silicon and Intel) and screenshots of
-# the widget on a real macOS desktop, both kept as run artifacts. Nothing is published.
+# the widget on a real macOS desktop, both kept as run artifacts. Nothing is published. Older macOS
+# runs the checks too, without the build.
 name: Mac build
 
 on:
@@ -22,7 +23,25 @@ permissions:
 
 jobs:
   dmg:
-    runs-on: macos-latest
+    name: ${{ matrix.os }}
+    strategy:
+      # An older macOS failing never costs the release build.
+      fail-fast: false
+      matrix:
+        include:
+          # The release build, on the newest macOS: Liquid Glass.
+          - os: macos-latest
+          # macOS 13 to 15 have no Liquid Glass: the Popover material, Aura's Windows look and the page's
+          # own tab pill. Only the checks, as `quick` runs them.
+          - os: macos-15
+            quick: true
+          # GitHub retires this image on 2026-11-02 and fails jobs on it now and then before that, so it
+          # may fail without failing the run. Drop it then. GitHub no longer has macOS 13.
+          - os: macos-14
+            quick: true
+            retiring: true
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.retiring == true }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -49,6 +68,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: mac
+          # Each older image keeps a cache of its own, built with its own Xcode.
+          key: ${{ matrix.quick && matrix.os || '' }}
 
       - name: Host tests
         working-directory: mac
@@ -56,8 +77,9 @@ jobs:
 
       # One fixed, self-made identity, so every build is the same app to the Keychain and "Always
       # Allow" holds across updates. It is not Apple's, so Gatekeeper still asks once. Without the
-      # secrets (a fork), the build stays ad hoc.
+      # secrets (a fork), the build stays ad hoc. Older macOS builds nothing to sign.
       - name: Signing identity
+        if: ${{ !matrix.quick }}
         env:
           P12: ${{ secrets.MAC_SIGNING_P12 }}
           PASSWORD: ${{ secrets.MAC_SIGNING_PASSWORD }}
@@ -77,7 +99,7 @@ jobs:
           echo "APPLE_SIGNING_IDENTITY=295A3D46D0543329ACDF1B9ACBE00BE31825F3A9" >> "$GITHUB_ENV"
 
       - name: Universal app
-        if: ${{ !inputs.quick }}
+        if: ${{ !inputs.quick && !matrix.quick }}
         working-directory: mac
         timeout-minutes: 20
         run: npx --yes @tauri-apps/cli@2 build --target universal-apple-darwin
@@ -87,7 +109,7 @@ jobs:
       # Gatekeeper before the app does). This one is "Still Today Installer", with its own icon, the
       # window laid out in Finder (dmg/background*.png), and no signature; the app inside keeps its own.
       - name: Installer .dmg
-        if: ${{ !inputs.quick }}
+        if: ${{ !inputs.quick && !matrix.quick }}
         working-directory: mac
         timeout-minutes: 10
         env:
@@ -116,7 +138,7 @@ jobs:
       # The download to offer: unlike the .dmg it meets Gatekeeper once, and the app moves itself
       # into Applications (src/install.rs). ditto keeps the bundle's signature intact.
       - name: .zip
-        if: ${{ !inputs.quick }}
+        if: ${{ !inputs.quick && !matrix.quick }}
         working-directory: mac/target/universal-apple-darwin/release/bundle
         run: |
           dmg=$(ls dmg/*.dmg)
@@ -125,7 +147,7 @@ jobs:
 
       # First run puts the widget in the top-right corner of the main display.
       - name: Screenshots
-        if: ${{ !inputs.quick }}
+        if: ${{ !inputs.quick && !matrix.quick }}
         run: |
           mkdir -p shots
           open "mac/target/universal-apple-darwin/release/bundle/macos/Still Today.app"
@@ -157,7 +179,7 @@ jobs:
           codesign -dr - "mac/target/universal-apple-darwin/release/bundle/macos/Still Today.app" >> shots/system.txt 2>&1
 
       - uses: actions/upload-artifact@v4
-        if: ${{ !inputs.quick }}
+        if: ${{ !inputs.quick && !matrix.quick }}
         with:
           name: still-today-mac
           path: |
@@ -166,14 +188,14 @@ jobs:
       # Asked for by hand only: the same app with the test probe on 127.0.0.1:9334, to tune the look
       # beside the system's own widgets. Never handed to testers.
       - name: Probe app
-        if: inputs.probe
+        if: inputs.probe && !matrix.quick
         working-directory: mac
         run: |
           npx --yes @tauri-apps/cli@2 build --target universal-apple-darwin --features probe --bundles app
           cd target/universal-apple-darwin/release/bundle/macos
           ditto -c -k --keepParent "Still Today.app" "$RUNNER_TEMP/still-today-probe.zip"
       - uses: actions/upload-artifact@v4
-        if: inputs.probe
+        if: inputs.probe && !matrix.quick
         with:
           name: still-today-mac-probe
           path: ${{ runner.temp }}/still-today-probe.zip
@@ -196,12 +218,14 @@ jobs:
           ./target/debug/still-today > ../shots/probe.log 2>&1 &
           failed=0
           python3 ../.github/mac-check/check.py ../shots/check || { cat ../shots/probe.log; failed=1; }
-          # Liquid Glass as the tab bar's selection pill, recorded. Not a check.
-          python3 ../.github/mac-check/pill.py ../shots/pill || true
+          # The card in each look, light and dark. Not a check.
+          python3 ../.github/mac-check/looks.py ../shots/looks || true
+          # Liquid Glass as the tab bar's selection pill, recorded where the system has it. Not a check.
+          [ "$(sw_vers -productVersion | cut -d. -f1)" -lt 26 ] || python3 ../.github/mac-check/pill.py ../shots/pill || true
           exit $failed
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: screenshots
+          name: ${{ matrix.quick && format('screenshots-{0}', matrix.os) || 'screenshots' }}
           path: shots/
