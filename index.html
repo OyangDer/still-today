@@ -3,16 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Still Today · Canvas 桌面小组件 | 作业和截止时间放在 Windows 桌面上</title>
-<meta name="description" content="Still Today 是给留学生的免费 Windows 桌面小组件：把 Canvas 上的作业、截止时间、课表和公告放到桌面上，不用开浏览器，不用每次登录验证。">
+<title>Still Today · Canvas 桌面小组件 | 作业和截止时间放在 Windows 和 Mac 桌面上</title>
+<meta name="description" content="Still Today 是给留学生的免费桌面小组件，Windows 和 Mac 都能用：把 Canvas 上的作业、截止时间、课表和公告放到桌面上，不用开浏览器，不用每次登录验证。">
 <link rel="canonical" href="https://oyangder.github.io/still-today/">
 <link rel="alternate" hreflang="zh-CN" href="https://oyangder.github.io/still-today/">
 <link rel="alternate" hreflang="en" href="https://oyangder.github.io/still-today/en/">
 <link rel="alternate" hreflang="x-default" href="https://oyangder.github.io/still-today/">
 <link rel="icon" href="favicon.png">
 <meta property="og:title" content="Still Today · Canvas 桌面小组件">
-<meta property="og:description" content="把 Canvas 上的作业、截止时间、课表和公告放到 Windows 桌面上。">
+<meta property="og:description" content="把 Canvas 上的作业、截止时间、课表和公告放到 Windows 和 Mac 桌面上。">
 <meta property="og:image" content="https://oyangder.github.io/still-today/img/zh/today.webp">
+<script>/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints < 2 && document.documentElement.classList.add('mac')</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -36,25 +37,34 @@
     <div class="reveal">
       <p class="eyebrow">CANVAS 桌面小组件 · 给留学生</p>
       <h1>今天要交什么，<br>看一眼桌面就知道。</h1>
-      <p class="lead">只是想看一眼作业，却每次都要打开浏览器、登录、等手机验证？Still Today 把 Canvas 上的作业、截止时间、课表和公告放到 Windows 桌面上。</p>
+      <p class="lead">只是想看一眼作业，却每次都要打开浏览器、登录、等手机验证？Still Today 把 Canvas 上的作业、截止时间、课表和公告放到 Windows 和 Mac 桌面上。</p>
       <div class="desk-only">
         <div class="cta">
-          <a class="btn" href="https://github.com/OyangDer/still-today/releases/latest" data-download>
-            <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M0 2.2 6.5 1.3v6.2H0zM7.3 1.2 16 0v7.5H7.3zM0 8.3h6.5v6.3L0 13.7zM7.3 8.3H16V16l-8.7-1.2z"/></svg>
-            下载 Windows 版
-          </a>
-          <span class="meta" data-meta>v0.2.3 · 2.5 MB · Windows 10 / 11</span>
+          <div class="dl" data-os="win">
+            <a class="btn" href="https://github.com/OyangDer/still-today/releases/latest" data-download>
+              <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M0 2.2 6.5 1.3v6.2H0zM7.3 1.2 16 0v7.5H7.3zM0 8.3h6.5v6.3L0 13.7zM7.3 8.3H16V16l-8.7-1.2z"/></svg>
+              下载 Windows 版
+            </a>
+            <span class="meta" data-meta>v0.2.3 · 2.5 MB · Windows 10 / 11</span>
+          </div>
+          <div class="dl" data-os="mac">
+            <a class="btn" href="https://github.com/OyangDer/still-today/releases" data-download-mac>
+              <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.182.008C11.148-.03 9.923.023 8.857 1.18c-1.066 1.156-.902 2.482-.878 2.516s1.52.087 2.475-1.258.762-2.391.728-2.43m3.314 11.733c-.048-.096-2.325-1.234-2.113-3.422s1.675-2.789 1.698-2.854-.597-.79-1.254-1.157a3.7 3.7 0 0 0-1.563-.434c-.108-.003-.483-.095-1.254.116-.508.139-1.653.589-1.968.607-.316.018-1.256-.522-2.267-.665-.647-.125-1.333.131-1.824.328-.49.196-1.422.754-2.074 2.237-.652 1.482-.311 3.83-.067 4.56s.625 1.924 1.273 2.796c.576.984 1.34 1.667 1.659 1.899s1.219.386 1.843.067c.502-.308 1.408-.485 1.766-.472.357.013 1.061.154 1.782.539.571.197 1.111.115 1.652-.105.541-.221 1.324-1.059 2.238-2.758q.52-1.185.473-1.282"/></svg>
+              下载 Mac 版
+            </a>
+            <span class="meta" data-meta-mac>macOS 13+ · M 芯片和 Intel 通用</span>
+          </div>
         </div>
-        <p class="sub">免费 · 开源 · Mac 版正在内测</p>
+        <p class="sub">免费 · 开源 · Windows 和 Mac 都能用</p>
       </div>
       <div class="phone-only">
         <button class="btn" type="button" data-copy data-copied="已复制，发到电脑上打开">复制网址，在电脑上打开</button>
-        <p class="phone-note">Still Today 是 Windows 电脑软件。把网址发到电脑上（比如微信的「文件传输助手」），在电脑上下载安装。</p>
+        <p class="phone-note">Still Today 是电脑软件，Windows 和 Mac 都能用。把网址发到电脑上（比如微信的「文件传输助手」），在电脑上下载安装。</p>
       </div>
     </div>
     <div class="stage" aria-hidden="true">
-      <img class="w w-tasks" src="img/zh/tasks.webp" alt="" width="880" height="1200">
-      <img class="w w-today" src="img/zh/today.webp" alt="" width="720" height="674">
+      <img class="w w-tasks" src="img/zh/tasks.webp" data-mac="img/zh/mac/hero-tasks.webp" alt="" width="880" height="1200">
+      <img class="w w-today" src="img/zh/today.webp" data-mac="img/zh/mac/hero-today.webp" alt="" width="720" height="674">
     </div>
   </div>
 </div>
@@ -70,7 +80,7 @@
       <div class="reveal">
         <div class="n">02</div>
         <h3>自动同步</h3>
-        <p>每 10 分钟和 Canvas 同步一次。交了作业自动打勾，出分和新公告有 Windows 通知。</p>
+        <p>每 10 分钟和 Canvas 同步一次。交了作业自动打勾，出分和新公告会发系统通知。</p>
       </div>
       <div class="reveal">
         <div class="n">03</div>
@@ -89,7 +99,7 @@
     </div>
 
     <div class="feature reveal">
-      <div class="tile"><img class="tall" src="img/zh/tasks.webp" alt="任务列表：作业按截止时间分组" width="880" height="1200" loading="lazy"></div>
+      <div class="tile"><img class="tall" src="img/zh/tasks.webp" data-mac="img/zh/mac/tasks.webp" alt="任务列表：作业按截止时间分组" width="880" height="1200" loading="lazy"></div>
       <div>
         <p class="label">任务</p>
         <h3>所有课程的作业，<br>按截止时间排好。</h3>
@@ -99,7 +109,7 @@
     </div>
 
     <div class="feature reveal">
-      <div class="tile"><img class="wide" src="img/zh/focus.webp" alt="专注计时器绑定到一项作业" width="720" height="640" loading="lazy"></div>
+      <div class="tile"><img class="wide" src="img/zh/focus.webp" data-mac="img/zh/mac/focus.webp" alt="专注计时器绑定到一项作业" width="720" height="640" loading="lazy"></div>
       <div>
         <p class="label">专注</p>
         <h3>专注时间，<br>记在具体的作业上。</h3>
@@ -108,7 +118,7 @@
     </div>
 
     <div class="feature reveal">
-      <div class="tile"><img class="tall" src="img/zh/calendar.webp" alt="月视图日历" width="880" height="1200" loading="lazy"></div>
+      <div class="tile"><img class="tall" src="img/zh/calendar.webp" data-mac="img/zh/mac/calendar.webp" alt="月视图日历" width="880" height="1200" loading="lazy"></div>
       <div>
         <p class="label">日历</p>
         <h3>截止时间和课表，<br>在一张日历上。</h3>
@@ -118,24 +128,34 @@
     </div>
 
     <div class="feature reveal">
-      <div class="tile"><img class="tall" src="img/zh/announcements.webp" alt="课程公告" width="880" height="1200" loading="lazy"></div>
+      <div class="tile"><img class="tall" src="img/zh/announcements.webp" data-mac="img/zh/mac/announcements.webp" alt="课程公告" width="880" height="1200" loading="lazy"></div>
       <div>
         <p class="label">公告与通知</p>
         <h3>新公告和出分，<br>不会错过。</h3>
-        <p>课程公告单独一页，新公告有标记。出分、新公告都会发 Windows 通知。</p>
+        <p>课程公告单独一页，新公告有标记。出分、新公告都会发系统通知。</p>
       </div>
     </div>
 
     <div class="feature reveal">
       <div class="tile pair">
-        <div><img src="img/zh/today.webp" alt="浅色壁纸上的小组件" width="720" height="674" loading="lazy"></div>
-        <div><img src="img/zh/today-night.webp" alt="深色壁纸上的小组件" width="720" height="674" loading="lazy"></div>
+        <div><img src="img/zh/today.webp" data-mac="img/zh/mac/today-light.webp" alt="浅色壁纸上的小组件" width="720" height="674" loading="lazy"></div>
+        <div><img src="img/zh/today-night.webp" data-mac="img/zh/mac/today-dark.webp" alt="深色壁纸上的小组件" width="720" height="674" loading="lazy"></div>
       </div>
       <div>
         <p class="label">外观</p>
         <h3>像是桌面的一部分。</h3>
         <p>Aura 主题会模糊小组件背后的壁纸，并跟着壁纸选深色或浅色文字。也有浅色和深色两种主题。</p>
         <p>在总览、任务、日历、专注之间切换时，小组件会平滑地变换形状。</p>
+      </div>
+    </div>
+
+    <div class="feature full reveal">
+      <div class="tile desktop"><img src="img/zh/mac-desktop.webp" width="1456" height="752" alt="Mac 桌面上，Still Today 和系统自带的小组件放在一起" loading="lazy"></div>
+      <div>
+        <p class="label">Mac 版</p>
+        <h3>在 Mac 上，<br>和系统小组件放在一起。</h3>
+        <p>玻璃效果照着系统自带的小组件调过，有「通透」和「柔雾」两种。它待在桌面上、其他窗口下面，拖到哪里就停在哪里，也会自动避开系统小组件。</p>
+        <p>M 芯片和 Intel 芯片的 Mac 都能用，需要 macOS 13 或更新。它在菜单栏里，不占 Dock。</p>
       </div>
     </div>
   </div>
@@ -150,13 +170,16 @@
     <div class="steps">
       <div class="card reveal">
         <div class="n">1</div>
-        <h3>下载并运行安装包</h3>
-        <p>只为当前 Windows 用户安装，不需要管理员权限。浏览器提示「不常下载」时，选择 <b>保留</b>。支持 Windows 10（1903 或更高）和 Windows 11。</p>
+        <h3>下载并安装</h3>
+        <p><b>Windows</b>：运行安装包，只为当前用户安装，不需要管理员权限。浏览器提示「不常下载」时，选择 <b>保留</b>。支持 Windows 10（1903 或更高）和 Windows 11。</p>
+        <p><b>Mac</b>：打开 .dmg，把 Still Today 拖进「应用程序」。需要 macOS 13 或更新。</p>
       </div>
       <div class="card reveal">
         <div class="n">2</div>
-        <h3>如果 Windows 拦了一下</h3>
-        <p>提示「Windows 已保护你的电脑」时，点 <b>更多信息</b>，再点 <b>仍要运行</b>。这是因为安装包还没有代码签名。</p>
+        <h3>如果系统拦了一下</h3>
+        <p><b>Windows</b>：提示「Windows 已保护你的电脑」时，点 <b>更多信息</b>，再点 <b>仍要运行</b>。</p>
+        <p><b>Mac</b>：第一次打开被拦下时，到「系统设置 → 隐私与安全性」，往下翻，点 <b>仍要打开</b>。</p>
+        <p>这是因为安装包还没有代码签名和苹果公证，只有第一次需要这样做。</p>
       </div>
       <div class="card reveal">
         <div class="n">3</div>
@@ -216,11 +239,15 @@
       </details>
       <details>
         <summary>安全吗？令牌存在哪里？</summary>
-        <p>令牌保存在你电脑的 Windows 凭据管理器里，不写进文件，只会发给你学校的 Canvas。Still Today 没有账号，中间也没有任何服务器。不想用了，在 Canvas 设置里删掉这个令牌，它会立刻失效。</p>
+        <p>令牌保存在 Windows 的凭据管理器或 Mac 的钥匙串里，不写进文件，只会发给你学校的 Canvas。Still Today 没有账号，中间也没有任何服务器。不想用了，在 Canvas 设置里删掉这个令牌，它会立刻失效。</p>
       </details>
       <details>
         <summary>为什么 Windows 提示「已保护你的电脑」？</summary>
         <p>安装包还没有代码签名，Windows SmartScreen 不认识它。点「更多信息」，再点「仍要运行」即可。代码完全公开，可以在 GitHub 上查看。</p>
+      </details>
+      <details>
+        <summary>为什么 Mac 提示无法打开？</summary>
+        <p>Mac 版还没有经过苹果公证。到「系统设置 → 隐私与安全性」，往下翻，点「仍要打开」（macOS 13/14 也可以在应用上右键 → 打开），只需要第一次这样做。更新后第一次打开时，钥匙串可能会询问能否读取 Canvas 令牌，点「始终允许」。</p>
       </details>
       <details>
         <summary>Canvas 设置页里找不到 New Access Token？</summary>
@@ -228,7 +255,7 @@
       </details>
       <details>
         <summary>有 Mac 版吗？</summary>
-        <p>Mac 版正在小范围内测，准备好以后会在这里发布。</p>
+        <p>有。M 芯片和 Intel 芯片的 Mac 都能用，需要 macOS 13 或更新。点上面的「下载 Mac 版」，或到 GitHub 的 <a href="https://github.com/OyangDer/still-today/releases">版本页</a> 下载。</p>
       </details>
       <details>
         <summary>支持 Blackboard 或 Moodle 吗？</summary>
@@ -236,7 +263,7 @@
       </details>
       <details>
         <summary>我的数据存在哪里？卸载会丢吗？</summary>
-        <p>任务、专注记录和设置都保存在你电脑的 <code>%LOCALAPPDATA%\StillToday</code>。卸载不会删除数据，重新安装后一切照旧。</p>
+        <p>任务、专注记录和设置都保存在你自己的电脑上：Windows 在 <code>%LOCALAPPDATA%\StillToday</code>，Mac 在 <code>~/Library/Application Support/app.stilltoday.widget</code>。卸载不会删除数据，重新安装后一切照旧。</p>
       </details>
     </div>
   </div>
@@ -245,15 +272,26 @@
 <div class="closing reveal">
   <h2>把 Canvas 放到桌面上。</h2>
   <div class="desk-only">
-    <a class="btn" href="https://github.com/OyangDer/still-today/releases/latest" data-download>
-      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M0 2.2 6.5 1.3v6.2H0zM7.3 1.2 16 0v7.5H7.3zM0 8.3h6.5v6.3L0 13.7zM7.3 8.3H16V16l-8.7-1.2z"/></svg>
-      下载 Windows 版
-    </a>
-    <p class="sub" data-meta>v0.2.3 · 2.5 MB · Windows 10 / 11</p>
+    <div class="cta">
+      <div class="dl" data-os="win">
+        <a class="btn" href="https://github.com/OyangDer/still-today/releases/latest" data-download>
+          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M0 2.2 6.5 1.3v6.2H0zM7.3 1.2 16 0v7.5H7.3zM0 8.3h6.5v6.3L0 13.7zM7.3 8.3H16V16l-8.7-1.2z"/></svg>
+          下载 Windows 版
+        </a>
+        <span class="meta" data-meta>v0.2.3 · 2.5 MB · Windows 10 / 11</span>
+      </div>
+      <div class="dl" data-os="mac">
+        <a class="btn" href="https://github.com/OyangDer/still-today/releases" data-download-mac>
+          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.182.008C11.148-.03 9.923.023 8.857 1.18c-1.066 1.156-.902 2.482-.878 2.516s1.52.087 2.475-1.258.762-2.391.728-2.43m3.314 11.733c-.048-.096-2.325-1.234-2.113-3.422s1.675-2.789 1.698-2.854-.597-.79-1.254-1.157a3.7 3.7 0 0 0-1.563-.434c-.108-.003-.483-.095-1.254.116-.508.139-1.653.589-1.968.607-.316.018-1.256-.522-2.267-.665-.647-.125-1.333.131-1.824.328-.49.196-1.422.754-2.074 2.237-.652 1.482-.311 3.83-.067 4.56s.625 1.924 1.273 2.796c.576.984 1.34 1.667 1.659 1.899s1.219.386 1.843.067c.502-.308 1.408-.485 1.766-.472.357.013 1.061.154 1.782.539.571.197 1.111.115 1.652-.105.541-.221 1.324-1.059 2.238-2.758q.52-1.185.473-1.282"/></svg>
+          下载 Mac 版
+        </a>
+        <span class="meta" data-meta-mac>macOS 13+ · M 芯片和 Intel 通用</span>
+      </div>
+    </div>
   </div>
   <div class="phone-only">
     <button class="btn" type="button" data-copy data-copied="已复制，发到电脑上打开">复制网址，在电脑上打开</button>
-    <p class="phone-note">Still Today 是 Windows 电脑软件，请在电脑上下载安装。</p>
+    <p class="phone-note">Still Today 是电脑软件（Windows 和 Mac），请在电脑上下载安装。</p>
   </div>
 </div>
 

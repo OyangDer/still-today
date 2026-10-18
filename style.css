@@ -78,6 +78,15 @@ nav a:hover { color: var(--ink); }
 .btn:hover { transform: translateY(-1px); box-shadow: 0 16px 32px -12px rgba(22, 35, 43, 0.6); }
 .btn svg { width: 17px; height: 17px; }
 .meta { font-size: 13.5px; color: var(--muted); }
+/* Two downloads: the visitor's own system leads, the other is a quiet second. */
+.dl { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+[data-os="mac"] .btn, html.mac [data-os="win"] .btn {
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--ink-deep);
+  box-shadow: inset 0 0 0 1px rgba(22, 35, 43, 0.14), 0 10px 24px -16px rgba(22, 35, 43, 0.45);
+}
+html.mac [data-os="mac"] .btn { background: var(--ink-deep); color: #fff; box-shadow: 0 12px 28px -12px rgba(22, 35, 43, 0.55); }
+html.mac [data-os="mac"] { order: -1; }
 .phone-only { display: none; }
 @media (pointer: coarse) and (max-width: 860px) {
   .desk-only { display: none !important; }
@@ -117,7 +126,7 @@ h1 {
   letter-spacing: -0.025em;
 }
 .lead { margin: 26px 0 38px; max-width: 30em; font-size: 17.5px; color: #3a4952; }
-.cta { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 20px; }
+.cta { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 18px 16px; }
 .cta .sub { margin: 16px 0 0; font-size: 13.5px; color: var(--muted); }
 .phone-note { margin: 12px 0 0; max-width: 24em; font-size: 14px; color: #3a4952; }
 
@@ -172,6 +181,15 @@ h2 {
 .tile.pair > div { display: grid; place-items: center; height: 100%; min-height: 560px; padding: 40px 28px; }
 .tile.pair > div + div { background: var(--dusk); }
 .tile.pair img { width: 100%; max-width: 280px; }
+/* The Mac pictures carry the widget's own rounded corners with clear pixels outside them, so their
+   shadow follows that shape; a box shadow would show square corners. */
+html.mac .stage .w[data-mac], html.mac .tile img[data-mac] { border-radius: 0; box-shadow: none; filter: drop-shadow(0 26px 30px rgba(22, 35, 43, 0.3)); }
+/* The Mac desktop is a wide picture: the words above it, the picture the full width. */
+.feature.full { grid-template-columns: 1fr; gap: 40px; }
+.feature.full > div:not(.tile) { max-width: 680px; }
+.feature.full .tile { order: 2; }
+.tile.desktop { min-height: 0; padding: 0; overflow: hidden; }
+.tile.desktop img { width: 100%; border-radius: 0; box-shadow: none; }
 .label { margin: 0 0 14px; font-size: 13.5px; font-weight: 600; letter-spacing: 0.08em; color: var(--accent); }
 .feature h3 { margin: 0 0 18px; font-size: clamp(26px, 2.6vw, 32px); font-weight: 400; line-height: 1.3; letter-spacing: -0.015em; }
 .feature p { margin: 0 0 14px; color: var(--muted); }
@@ -197,6 +215,7 @@ h2 {
 }
 .card h3 { margin: 0 0 10px; font-size: 18px; font-weight: 600; }
 .card p { margin: 0; color: var(--muted); font-size: 15px; }
+.card p + p { margin-top: 10px; }
 .card b { color: var(--ink); font-weight: 600; }
 
 .connect { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; margin-top: 80px; }
@@ -256,6 +275,8 @@ code { font: 14px Consolas, 'SF Mono', monospace; padding: 2px 6px; border-radiu
   text-align: center;
 }
 .closing h2 { margin-bottom: 36px; }
+.closing .cta { justify-content: center; }
+.closing .dl { align-items: center; }
 .closing .sub { margin: 16px 0 0; font-size: 13.5px; color: var(--muted); }
 .closing .phone-note { margin-left: auto; margin-right: auto; }
 
