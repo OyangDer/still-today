@@ -4,12 +4,12 @@
 
 只是想看一眼作业，却每次都要打开浏览器、登录、再等手机验证？
 
-Still Today 是一个 Windows 桌面小组件，给学校用 Canvas（海外高校常用的教学平台）的留学生。它把 Canvas 上的作业、截止时间和课程日程放在桌面上，不用打开浏览器，就知道今天要做什么。
+Still Today 是一个桌面小组件，Windows 和 Mac 都能用，给学校用 Canvas（海外高校常用的教学平台）的留学生。它把 Canvas 上的作业、截止时间和课程日程放在桌面上，不用打开浏览器，就知道今天要做什么。
 
 https://github.com/user-attachments/assets/0310065c-c8b7-49bc-8fc3-10a0d07fedda
 
 - **不用开浏览器**：作业、截止时间、课程日程和公告都在桌面上，看一眼就够。
-- **自动同步**：每 10 分钟和 Canvas 同步一次。交了作业自动打勾，出分、新公告有 Windows 通知。
+- **自动同步**：每 10 分钟和 Canvas 同步一次。交了作业自动打勾，出分、新公告会发系统通知。
 - **数据只在你的电脑上**：用你自己的 Canvas 访问令牌读取，没有账号，也没有中转服务器。
 
 ## 功能
@@ -29,7 +29,7 @@ https://github.com/user-attachments/assets/0310065c-c8b7-49bc-8fc3-10a0d07fedda
 - **任务列表**：所有课程的作业和测验按截止时间分组。可以按课程筛选、搜索，也可以加自己的任务。
 - **专注**：计时器可以绑定到某项作业，专注的时长记在这项作业上。
 - **提交**：任务详情里有直达 Canvas 的按钮。提交以后，下次同步时自动打勾。
-- **出分和改期**：出分时有 Windows 通知，成绩显示在任务上。老师改了截止时间，列表里的时间也跟着改。
+- **出分和改期**：出分时有系统通知，成绩显示在任务上。老师改了截止时间，列表里的时间也跟着改。
 
 | 任务 | 专注 | 任务详情 |
 |:---:|:---:|:---:|
@@ -39,7 +39,7 @@ https://github.com/user-attachments/assets/0310065c-c8b7-49bc-8fc3-10a0d07fedda
 
 - **日历**：月视图里有作业截止时间和 Canvas 课程日程，也可以加自己的日程。
 - **订阅**：可以订阅课表、Outlook、Google 日历。设置里写明了各自的订阅链接在哪找。
-- **公告**：课程公告单独一页，新公告有标记，也会发 Windows 通知。
+- **公告**：课程公告单独一页，新公告有标记，也会发系统通知。
 
 | 日历 | 日历订阅 | 课程公告 |
 |:---:|:---:|:---:|
@@ -59,20 +59,42 @@ https://github.com/user-attachments/assets/0310065c-c8b7-49bc-8fc3-10a0d07fedda
 - 在总览、任务、日历、专注之间切换时，小组件会变换形状。
 - 三种主题：Aura 会模糊小组件背后的壁纸，并跟着壁纸选深色或浅色文字；另有浅色、深色。
 - Canvas 课程名太长可以改名，用不上的课程可以隐藏。
-- 开机启动、置顶显示、锁定位置，不用时可以隐藏到托盘。界面支持中文和英文。
+- 开机启动、置顶显示、锁定位置，不用时可以隐藏到托盘（Mac 上是菜单栏）。界面支持中文和英文。
 
 | 切换视图 | 给课程改名 |
 |:---:|:---:|
 | <img src="docs/screenshots/zh/morph.gif" width="248" alt="小组件在总览、任务、日历、专注之间切换时变换形状"> | <img src="docs/screenshots/zh/settings-courses.png" width="240" alt="在设置里给课程改名"> |
 
+### 6. Mac 版：圆角和液态玻璃
+
+- 卡片的圆角和 macOS 自带的桌面小组件一致，可以和系统小组件并排放在桌面上，摆放时也会自动避开它们。
+- 在 macOS 26 上用系统的液态玻璃（Liquid Glass），有两种：「通透」照着系统小组件的模糊和颜色调过，「柔雾」更朦胧。都分浅色和深色，也可以跟随系统。
+- 它在菜单栏里（三张卡片的小图标），不占 Dock。
+
+<img src="docs/screenshots/zh/mac-desktop.png" width="728" alt="Mac 桌面上，Still Today 和系统自带的时钟、电池、天气小组件放在一起">
+
 ## 安装
 
-1. 从 [Releases](../../releases/latest) 下载 `StillToday-<版本号>-win-x64-setup.exe`。
-2. 运行安装包。它只为当前 Windows 用户安装，不需要管理员权限。
-3. Windows 可能会提示 **"Windows 已保护你的电脑"**。这是因为安装包没有代码签名，SmartScreen 不认识它。点 **更多信息**，再点 **仍要运行**。
-4. 按下面「连接 Canvas」的步骤连上你的学校。
+从 [Releases](../../releases/latest) 下载你的电脑对应的安装包，Windows 版和 Mac 版在同一个页面。
+
+### Windows
+
+1. 下载 `StillToday-<版本号>-win-x64-setup.exe`，运行它。它只为当前 Windows 用户安装，不需要管理员权限。
+2. Windows 可能会提示 **"Windows 已保护你的电脑"**。这是因为安装包没有代码签名，SmartScreen 不认识它。点 **更多信息**，再点 **仍要运行**。
+3. 按下面「连接 Canvas」的步骤连上你的学校。
 
 **系统要求**：Windows 10（1903 或更高版本）或 Windows 11。它运行在系统自带的 .NET Framework 4.8 和 WebView2 Runtime 上，所以安装包只有约 2.5 MB。
+
+### Mac
+
+1. 下载 `Still-Today-<版本号>-mac.dmg`，打开后把 Still Today 拖进「应用程序」。
+2. 第一次打开会被系统拦下，因为它还没有经过苹果公证：到 **系统设置 → 隐私与安全性**，往下翻，点 **仍要打开**（macOS 13/14 也可以在应用上右键 → 打开）。只需要第一次这样做。
+3. 打开后它在菜单栏里（三张卡片的小图标），不在 Dock 里。
+4. 按下面「连接 Canvas」的步骤连上你的学校。
+
+**钥匙串密码**：Mac 上的 Canvas 令牌保存在 macOS 的「钥匙串」里，这是苹果存放密码的加密位置。更新以后（有时重启以后也会），第一次同步时 macOS 可能弹窗，要你输入钥匙串密码，也就是你的 Mac 开机密码。输入后请点 **始终允许**：只点「允许」的话，以后每次打开都会再问一次。更新后会再问，是因为 Still Today 还没有苹果开发者签名，系统把每个新版本都当成一个新程序。
+
+**系统要求**：macOS 13 或更新，M 芯片和 Intel 芯片的 Mac 都能用。
 
 ## 连接 Canvas
 
@@ -113,13 +135,13 @@ https://github.com/user-attachments/assets/0310065c-c8b7-49bc-8fc3-10a0d07fedda
 ## 你的数据
 
 - 所有数据都在你的电脑上。Still Today 只连接你的 Canvas 和你添加的日历订阅，没有账号，中间也没有我的服务器。
-- 任务、专注记录和设置保存在 `%LOCALAPPDATA%\StillToday`。
-- Canvas 令牌和日历订阅链接保存在 Windows 凭据管理器里，不写进文件。
+- 任务、专注记录和设置保存在 Windows 的 `%LOCALAPPDATA%\StillToday`，或 Mac 的 `~/Library/Application Support/app.stilltoday.widget`。
+- Canvas 令牌和日历订阅链接保存在 Windows 凭据管理器或 Mac 的钥匙串里，不写进文件。
 - 卸载不会删除数据，重新安装后一切照旧。
 
 ## 从源码构建
 
-需要 pnpm、.NET 10 SDK；打包安装程序还需要 Inno Setup 7。
+Windows 版需要 pnpm、.NET 10 SDK；打包安装程序还需要 Inno Setup 7。
 
 ```powershell
 cd ui
@@ -132,5 +154,13 @@ dotnet build host/StillToday.csproj -c Release
 
 `scripts/packaging/Build-StillTodayInstaller.ps1` 会测试并构建全部内容，把安装包写到 `artifacts/installer/`。安装内容见 [`packaging/README.md`](packaging/README.md)。
 
+Mac 版的宿主用 Tauri 编写，在 [`mac` 分支](../../tree/mac)的 `mac/` 目录，需要 pnpm 和 Rust：
+
+```bash
+cd ui && pnpm install && pnpm build
+cd ../mac && cargo run
+```
+
 - `host/` 是 Windows 这一侧：在不同视图间变换形状的无边框窗口、托盘图标、背景模糊、通知、存储和网络访问。
-- `ui/` 是界面，用 Svelte 编写。
+- `mac/`（在 `mac` 分支上）是 Mac 这一侧：液态玻璃、桌面层级和网格摆放、菜单栏图标、通知、钥匙串和网络访问。
+- `ui/` 是两边共用的界面，用 Svelte 编写。
