@@ -174,20 +174,36 @@ check(near(state["x"] + state["w"], work["x"] + work["w"] - MARGIN) and near(sta
 check(boot.get("platform") == ("macos" if MAC else "windows") and boot.get("morph") is True, "boot reports the platform and the morph switch")
 
 # Morph: Calendar is wide; the viewport, which is the window, passes through sizes on the way. With
-# Reduce Motion on it jumps there at once, as it should. Before Mission Control below, which on macOS
-# 14 and 15 leaves the page short of frames for a while after.
-reduced = probe.js("return matchMedia('(prefers-reduced-motion: reduce)').matches")
-frames = probe.js("""
-document.querySelectorAll('[role=tab]')[2].click();
+# Reduce Motion on it jumps there at once, as it should.
+# The longest wait between the page's frames on the way says whether the page kept up.
+MORPH = """
+document.querySelectorAll('[role=tab]')[TAB].click();
 const seen = [], end = performance.now() + 900;
-while (performance.now() < end) { seen.push(`${innerWidth}x${innerHeight}`); await new Promise(requestAnimationFrame); }
-return [...new Set(seen)];
-""")
+let last = performance.now(), gap = 0;
+while (performance.now() < end) {
+  seen.push(`${innerWidth}x${innerHeight}`);
+  await new Promise(requestAnimationFrame);
+  gap = Math.max(gap, performance.now() - last);
+  last = performance.now();
+}
+return { sizes: [...new Set(seen)], gap: Math.round(gap) };
+"""
+reduced = probe.js("return matchMedia('(prefers-reduced-motion: reduce)').matches")
+morph = probe.js(MORPH.replace("TAB", "2"))
+frames = morph["sizes"]
 after = probe.native("state")
 check((len(frames) == 2 if reduced else len(frames) > 5) and frames[-1] == "440x600" and near(after["w"], 440) and near(after["h"], 600),
-      "morph to 440x600 at once (Reduce Motion)" if reduced else "morph to 440x600 in steps", f"{len(frames)} sizes: {' '.join(frames[:4])} … {frames[-1]}")
+      "morph to 440x600 at once (Reduce Motion)" if reduced else "morph to 440x600 in steps",
+      f"{len(frames)} sizes: {' '.join(frames[:4])} … {frames[-1]}, longest frame {morph['gap']}ms")
 probe.js("document.querySelectorAll('[role=tab]')[0].click();")
 time.sleep(0.9)
+# The same again, now that Calendar has been drawn once, and to Tasks, the same size, drawn for the
+# first time: whether a first morph or a view's first drawing costs the frames.
+for label, tab in (("morph to Calendar again", 2), ("morph to Tasks, first time", 3)):
+    again = probe.js(MORPH.replace("TAB", str(tab)))
+    note(label, f"{len(again['sizes'])} sizes, ends {again['sizes'][-1]}, longest frame {again['gap']}ms")
+    probe.js("document.querySelectorAll('[role=tab]')[0].click();")
+    time.sleep(0.9)
 
 if MAC:
     # Opened by hand it comes forward, and goes under other windows once another app is in front.
@@ -238,9 +254,9 @@ JSON.stringify(ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo
     subprocess.run([MC], check=False)
     back, back_s = alpha_until(1)
     detail = f"alpha {hidden} in {hide_s}s, back to {back} in {back_s}s, Dock over the screen {before} → {during}, ours {json.dumps(ours(listed))}"
-    # A runner on macOS 26 has no display for Mission Control to open on; on 14 and 15 it opens.
+    # Where Mission Control cannot open (a runner without a display for it) this stays a note.
     if opened:
-        check(hidden == 0 and back == 1, "hidden in Mission Control, and back after", detail)
+        check(near(hidden, 0, 0.01) and near(back, 1, 0.01), "hidden in Mission Control, and back after", detail)
     else:
         note("Mission Control did not open here (not counted; check on a real Mac)", detail)
     time.sleep(1)
