@@ -9,6 +9,7 @@ import glob
 import json
 import os
 import platform
+import re
 import socket
 import subprocess
 import sys
@@ -170,6 +171,24 @@ if MAC:
 # First run: the primary display's top-right corner, inside the margin.
 check(near(state["x"] + state["w"], work["x"] + work["w"] - MARGIN) and near(state["y"], work["y"] + MARGIN),
       "first run sits in the top-right corner", f"{state['x']:.0f},{state['y']:.0f} {state['w']:.0f}x{state['h']:.0f}")
+check(boot.get("platform") == ("macos" if MAC else "windows") and boot.get("morph") is True, "boot reports the platform and the morph switch")
+
+# Morph: Calendar is wide; the viewport, which is the window, passes through sizes on the way. With
+# Reduce Motion on it jumps there at once, as it should. Before Mission Control below, which on macOS
+# 14 and 15 leaves the page short of frames for a while after.
+reduced = probe.js("return matchMedia('(prefers-reduced-motion: reduce)').matches")
+frames = probe.js("""
+document.querySelectorAll('[role=tab]')[2].click();
+const seen = [], end = performance.now() + 900;
+while (performance.now() < end) { seen.push(`${innerWidth}x${innerHeight}`); await new Promise(requestAnimationFrame); }
+return [...new Set(seen)];
+""")
+after = probe.native("state")
+check((len(frames) == 2 if reduced else len(frames) > 5) and frames[-1] == "440x600" and near(after["w"], 440) and near(after["h"], 600),
+      "morph to 440x600 at once (Reduce Motion)" if reduced else "morph to 440x600 in steps", f"{len(frames)} sizes: {' '.join(frames[:4])} … {frames[-1]}")
+probe.js("document.querySelectorAll('[role=tab]')[0].click();")
+time.sleep(0.9)
+
 if MAC:
     # Opened by hand it comes forward, and goes under other windows once another app is in front.
     subprocess.run(["osascript", "-e", 'tell application "Finder" to activate'], check=False)
@@ -184,41 +203,56 @@ if MAC:
     # What Mission Control and Show Desktop do to it: Mission Control hides it (the widget clears
     # itself), Show Desktop leaves it where it is, as the Window Server lists it, and it is back after.
     MC = "/System/Applications/Mission Control.app/Contents/MacOS/Mission Control"
-    ONSCREEN = """ObjC.import('CoreGraphics');
+    WINDOWS = """ObjC.import('CoreGraphics');
 JSON.stringify(ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionOnScreenOnly, 0)))
-  .filter(w => /still-today|Still Today/.test(w.kCGWindowOwnerName)).map(w => w.kCGWindowBounds))"""
-    seen, alpha = {}, {}
-    for name, args in (("mission-control", []), ("show-desktop", ["1"])):
-        subprocess.run([MC, *args], check=False)
-        time.sleep(2)
-        seen[name] = json.loads(subprocess.run(["osascript", "-l", "JavaScript", "-e", ONSCREEN], capture_output=True, text=True).stdout or "[]")
-        alpha[name] = probe.native("state")["alpha"]
-        subprocess.run(["screencapture", "-x", os.path.join(SHOTS, f"{name}.png")], check=False)
-        subprocess.run([MC, *args], check=False)
-        time.sleep(2)
-        alpha[name + " after"] = probe.native("state")["alpha"]
-    kept = [b for b in seen["show-desktop"] if near(b["X"], state["x"]) and near(b["Y"], state["y"])]
-    # A CI runner has no display for Mission Control to open on, so there this fails whatever the
-    # widget does. It is recorded, not counted, and checked on a real Mac.
-    passed = alpha == {"mission-control": 0, "mission-control after": 1, "show-desktop": 1, "show-desktop after": 1} and bool(kept)
-    note(f"Mission Control hides it, Show Desktop leaves it in place: {'PASS' if passed else 'FAIL'} (not counted; check on a real Mac)",
-         json.dumps({"alpha": alpha, **seen}))
-check(boot.get("platform") == ("macos" if MAC else "windows") and boot.get("morph") is True, "boot reports the platform and the morph switch")
+  .map(w => ({ owner: w.kCGWindowOwnerName, layer: w.kCGWindowLayer, ...w.kCGWindowBounds })))"""
 
-# Morph: Calendar is wide; the viewport, which is the window, passes through sizes on the way. With
-# Reduce Motion on it jumps there at once, as it should.
-reduced = probe.js("return matchMedia('(prefers-reduced-motion: reduce)').matches")
-frames = probe.js("""
-document.querySelectorAll('[role=tab]')[2].click();
-const seen = [], end = performance.now() + 900;
-while (performance.now() < end) { seen.push(`${innerWidth}x${innerHeight}`); await new Promise(requestAnimationFrame); }
-return [...new Set(seen)];
-""")
-after = probe.native("state")
-check((len(frames) == 2 if reduced else len(frames) > 5) and frames[-1] == "440x600" and near(after["w"], 440) and near(after["h"], 600),
-      "morph to 440x600 at once (Reduce Motion)" if reduced else "morph to 440x600 in steps", f"{len(frames)} sizes: {' '.join(frames[:4])} … {frames[-1]}")
-probe.js("document.querySelectorAll('[role=tab]')[0].click();")
-time.sleep(0.9)
+    def windows():
+        return json.loads(subprocess.run(["osascript", "-l", "JavaScript", "-e", WINDOWS], capture_output=True, text=True).stdout or "[]")
+
+    def ours(listed):
+        return [{k: w[k] for k in ("X", "Y", "Width", "Height")} for w in listed if re.search("still-today|Still Today", w["owner"] or "")]
+
+    def covers(listed):
+        """The Dock's windows over the whole screen, which Mission Control and Show Desktop add."""
+        screen = probe.native("state")["screen"]
+        return sum(1 for w in listed if w["owner"] == "Dock" and w.get("Width", 0) >= screen["w"] and w.get("Height", 0) >= screen["h"])
+
+    def alpha_until(want, limit=3.0):
+        """The widget's alpha once it is `want`, or after `limit` seconds, and how long that took."""
+        began = time.time()
+        while True:
+            alpha = probe.native("state")["alpha"]
+            if abs(alpha - want) < 0.01 or time.time() - began > limit:
+                return alpha, round(time.time() - began, 1)
+            time.sleep(0.1)
+
+    here = probe.native("state")
+    before = covers(windows())
+    subprocess.run([MC], check=False)
+    hidden, hide_s = alpha_until(0)
+    listed = windows()
+    during = covers(listed)
+    opened = during > before
+    subprocess.run(["screencapture", "-x", os.path.join(SHOTS, "mission-control.png")], check=False)
+    subprocess.run([MC], check=False)
+    back, back_s = alpha_until(1)
+    detail = f"alpha {hidden} in {hide_s}s, back to {back} in {back_s}s, Dock over the screen {before} → {during}, ours {json.dumps(ours(listed))}"
+    # A runner on macOS 26 has no display for Mission Control to open on; on 14 and 15 it opens.
+    if opened:
+        check(hidden == 0 and back == 1, "hidden in Mission Control, and back after", detail)
+    else:
+        note("Mission Control did not open here (not counted; check on a real Mac)", detail)
+    time.sleep(1)
+    subprocess.run([MC, "1"], check=False)
+    time.sleep(2)
+    shown = probe.native("state")["alpha"]
+    kept = [b for b in ours(windows()) if near(b["X"], here["x"]) and near(b["Y"], here["y"])]
+    subprocess.run(["screencapture", "-x", os.path.join(SHOTS, "show-desktop.png")], check=False)
+    subprocess.run([MC, "1"], check=False)
+    time.sleep(2)
+    passed = shown == 1 and probe.native("state")["alpha"] == 1 and bool(kept)
+    note(f"Show Desktop leaves it in place: {'PASS' if passed else 'FAIL'} (not counted; check on a real Mac)", f"alpha {shown}, kept {kept}")
 
 # A drop off the grid glides onto it and is remembered.
 probe.native("move", x=work["x"] + 333.3, y=work["y"] + 217.7)
