@@ -189,6 +189,11 @@ while (performance.now() < end) {
 return { sizes: [...new Set(seen)], gap: Math.round(gap) };
 """
 reduced = probe.js("return matchMedia('(prefers-reduced-motion: reduce)').matches")
+# Diagnostic, reverted next: the first morph half a minute later, to tell the launch warming up from
+# the first resize.
+note("page up before the wait", f"{probe.js('return Math.round(performance.now())')}ms")
+time.sleep(30)
+note("page up at the first morph", f"{probe.js('return Math.round(performance.now())')}ms")
 morph = probe.js(MORPH.replace("TAB", "2"))
 frames = morph["sizes"]
 after = probe.native("state")
