@@ -124,7 +124,7 @@ fn follow_desktop(window: &WebviewWindow) {
             let Some(window) = WINDOW.lock().unwrap_or_else(|e| e.into_inner()).clone() else { continue };
             let target = window.clone();
             let _ = window.run_on_main_thread(move || {
-                let on = !on_desktop();
+                let on = !on_desktop(&target);
                 if SUBDUED.swap(on, Ordering::Relaxed) != on {
                     subdue(&target, on);
                 }
@@ -133,10 +133,15 @@ fn follow_desktop(window: &WebviewWindow) {
     });
 }
 
-/// Finder in front with no window of its own over the others' (the user clicked the wallpaper), or
-/// this app in front (the widget in use).
+/// Whether the user is on the desktop the widget sits on, as the system's widgets tell it: no ordinary
+/// window on that display (none open there, or a click on the wallpaper moved them aside), whichever
+/// app is in front, even on another display. Stage Manager's strip counts: while its thumbnails show
+/// the widgets stay subdued, and revealing the desktop slides it away. Also Finder in front with none
+/// of its windows topmost there (the wallpaper clicked with the windows left in place), or this app in
+/// front (the widget in use). Watched beside the widgets on macOS 27.0.1, with Stage Manager and two
+/// displays.
 #[cfg(target_os = "macos")]
-fn on_desktop() -> bool {
+fn on_desktop(window: &WebviewWindow) -> bool {
     use objc2::rc::Retained;
     use objc2::runtime::AnyObject;
     use objc2_foundation::{NSArray, NSDictionary, NSNumber, NSString};
@@ -154,18 +159,64 @@ fn on_desktop() -> bool {
     if pid == std::process::id() as i32 {
         return true;
     }
-    if front.bundleIdentifier().is_none_or(|id| id.to_string() != "com.apple.finder") {
-        return false;
-    }
+    let finder = front.bundleIdentifier().is_some_and(|id| id.to_string() == "com.apple.finder");
+    // The widget's display in the window list's points: top-left origin, the main display's.
+    let Ok(Some(display)) = window.current_monitor() else { return false };
+    let scale = display.scale_factor();
+    let (left, top) = (display.position().x as f64 / scale, display.position().y as f64 / scale);
+    let (right, bottom) = (left + display.size().width as f64 / scale, top + display.size().height as f64 / scale);
     objc2::rc::autoreleasepool(|_| {
         // SAFETY: as in widget::system_widgets.
         let Some(list) = (unsafe { Retained::from_raw(CGWindowListCopyWindowInfo(ON_SCREEN_ONLY | NO_DESKTOP, 0)) }) else { return false };
         let number = |d: &NSDictionary<NSString, AnyObject>, key: &str| {
             d.objectForKey(&NSString::from_str(key)).and_then(|v| v.downcast::<NSNumber>().ok()).map(|n| n.doubleValue())
         };
-        // The first ordinary window from the top: Finder's own means one of its windows is in use.
-        list.iter().find(|info| number(info, "kCGWindowLayer") == Some(0.0)).is_none_or(|info| number(&info, "kCGWindowOwnerPID") != Some(pid as f64))
+        let ordinary = |info: &NSDictionary<NSString, AnyObject>| {
+            let owner = info.objectForKey(&NSString::from_str("kCGWindowOwnerName")).and_then(|v| v.downcast::<NSString>().ok());
+            let Some(bounds) = info.objectForKey(&NSString::from_str("kCGWindowBounds")).and_then(|b| b.downcast::<NSDictionary>().ok()) else { return false };
+            // SAFETY: as in widget::system_widgets.
+            let bounds = unsafe { &*(Retained::as_ptr(&bounds) as *const NSDictionary<NSString, AnyObject>) };
+            let [x, y, w, h] = ["X", "Y", "Width", "Height"].map(|key| number(bounds, key).unwrap_or(0.0));
+            // Windows moved aside to reveal the desktop leave only a sliver on the display.
+            let shown = (x + w).min(right) - x.max(left);
+            let shown = shown.max(0.0) * ((y + h).min(bottom) - y.max(top)).max(0.0);
+            number(info, "kCGWindowLayer") == Some(0.0)
+                && number(info, "kCGWindowAlpha").is_some_and(|a| a > 0.0)
+                && number(info, "kCGWindowOwnerPID") != Some(std::process::id() as f64)
+                // Stage Manager's own: the strip's app icons and overlays.
+                && owner.is_none_or(|o| o.to_string() != "WindowManager")
+                && shown > 0.0
+                && shown >= 0.25 * w * h
+        };
+        match list.iter().find(|info| ordinary(info)) {
+            None => true,
+            // Finder in front over others' windows: the wallpaper was clicked. Under Stage Manager a click
+            // there moves the windows into the strip instead, and with the strip in view the widgets stay
+            // subdued whoever is in front.
+            Some(topmost) => finder && !stage_manager() && number(&topmost, "kCGWindowOwnerPID") != Some(pid as f64),
+        }
     })
+}
+
+/// Whether Stage Manager is on, as System Settings keeps it.
+#[cfg(target_os = "macos")]
+fn stage_manager() -> bool {
+    use objc2::rc::Retained;
+    use objc2::runtime::AnyObject;
+    use objc2_foundation::{NSNumber, NSString};
+    #[link(name = "CoreFoundation", kind = "framework")]
+    extern "C" {
+        fn CFPreferencesAppSynchronize(app: *const AnyObject) -> u8;
+        fn CFPreferencesCopyAppValue(key: *const AnyObject, app: *const AnyObject) -> *mut AnyObject;
+    }
+    let (app, key) = (NSString::from_str("com.apple.WindowManager"), NSString::from_str("GloballyEnabled"));
+    // SAFETY: NSStrings are toll-free CFStrings; a Copy function hands over its own reference, if any.
+    unsafe {
+        CFPreferencesAppSynchronize(Retained::as_ptr(&app).cast());
+        Retained::from_raw(CFPreferencesCopyAppValue(Retained::as_ptr(&key).cast(), Retained::as_ptr(&app).cast()))
+            .and_then(|v| v.downcast::<NSNumber>().ok())
+            .is_some_and(|on| on.boolValue())
+    }
 }
 
 /// Mist, the Windows widget's Aura: no glass, only the window server's blur behind the page, which
