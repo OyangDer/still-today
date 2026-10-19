@@ -22,11 +22,150 @@ pub fn apply(window: &WebviewWindow, radius: f64, dark: bool) -> bool {
     let _ = clear_liquid_glass(window);
     let options = LiquidGlassOptions::new(NSGlassEffectViewStyle::Regular).radius(radius);
     available() && apply_liquid_glass(window, options).is_ok() && {
-        widget_glass(window, dark);
-        window_blur(window, WIDGET_BLUR);
+        if system_glass() {
+            widget_glass_27(window);
+            window_blur(window, 0);
+            follow_desktop(window);
+        } else {
+            widget_glass(window, dark);
+            window_blur(window, WIDGET_BLUR);
+        }
         keep_active(window);
         true
     }
+}
+
+/// Whether the system's widgets wear glass the widget can wear as is (macOS 27 on). There its blur,
+/// colour and rim match theirs with nothing laid over it, and it follows the Liquid Glass slider in
+/// System Settings as theirs does; macOS 26 needs the tint and blur below.
+#[cfg(target_os = "macos")]
+pub fn system_glass() -> bool {
+    objc2_foundation::NSProcessInfo::processInfo().operatingSystemVersion().majorVersion >= 27
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn system_glass() -> bool {
+    false
+}
+
+/// The variant the system's widgets wear on macOS 27, matched beside them on 27.0.1 over plain and
+/// striped wallpapers: the same colour over nine plain ones, the same blur, and the same bend at the
+/// rim, at the slider's ends and middle alike.
+#[cfg(target_os = "macos")]
+const WIDGET_VARIANT_27: isize = 5;
+
+#[cfg(target_os = "macos")]
+fn widget_glass_27(window: &WebviewWindow) {
+    use objc2::runtime::Bool;
+    use objc2::{msg_send, sel};
+    let Some(glass) = glass_view(window) else { return };
+    // SAFETY: the glass view window-vibrancy just added; the setter is only sent where AppKit has it.
+    unsafe {
+        let known: Bool = msg_send![glass, respondsToSelector: sel!(set_variant:)];
+        if known.as_bool() {
+            let _: () = msg_send![glass, set_variant: WIDGET_VARIANT_27];
+        }
+    }
+    subdue(window, SUBDUED.load(std::sync::atomic::Ordering::Relaxed));
+}
+
+/// The glass view window-vibrancy added to the window, found by its tag.
+#[cfg(target_os = "macos")]
+fn glass_view(window: &WebviewWindow) -> Option<*mut objc2::runtime::AnyObject> {
+    use objc2::msg_send;
+    use objc2::runtime::AnyObject;
+    let ns = window.ns_window().ok()?;
+    // SAFETY: Tauri hands back the window's live NSWindow, used on the main thread.
+    unsafe {
+        let content: *mut AnyObject = msg_send![ns as *mut AnyObject, contentView];
+        if content.is_null() {
+            return None;
+        }
+        let glass: *mut AnyObject = msg_send![content, viewWithTag: GLASS_VIEW_TAG];
+        (!glass.is_null()).then_some(glass)
+    }
+}
+
+/// Whether the widget's glass wears the subdued look, as the system's widgets do while the desktop is
+/// not what the user is in: dimmer and a little more blurred.
+#[cfg(target_os = "macos")]
+static SUBDUED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+#[cfg(target_os = "macos")]
+fn subdue(window: &WebviewWindow, on: bool) {
+    use objc2::runtime::Bool;
+    use objc2::{msg_send, sel};
+    let Some(glass) = glass_view(window) else { return };
+    // SAFETY: the live glass view on the main thread. Key-value coding converts the number to whatever
+    // the private setter takes; it is only used where AppKit has the setter.
+    unsafe {
+        let known: Bool = msg_send![glass, respondsToSelector: sel!(set_subduedState:)];
+        if known.as_bool() {
+            let value = objc2_foundation::NSNumber::new_isize(on as isize);
+            let key = objc2_foundation::NSString::from_str("_subduedState");
+            let _: () = msg_send![glass, setValue: &*value, forKey: &*key];
+        }
+    }
+}
+
+/// The system's widgets wear full colour while the user is on the desktop itself, and the subdued look
+/// while they are in an app: the widget's glass follows, checked twice a second. On the desktop is
+/// Finder in front with none of its windows over the others, or the widget itself in use.
+#[cfg(target_os = "macos")]
+fn follow_desktop(window: &WebviewWindow) {
+    use std::sync::atomic::Ordering;
+    use std::sync::{Mutex, Once};
+    static WINDOW: Mutex<Option<WebviewWindow>> = Mutex::new(None);
+    static START: Once = Once::new();
+    *WINDOW.lock().unwrap_or_else(|e| e.into_inner()) = Some(window.clone());
+    START.call_once(|| {
+        std::thread::spawn(|| loop {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            let Some(window) = WINDOW.lock().unwrap_or_else(|e| e.into_inner()).clone() else { continue };
+            let target = window.clone();
+            let _ = window.run_on_main_thread(move || {
+                let on = !on_desktop();
+                if SUBDUED.swap(on, Ordering::Relaxed) != on {
+                    subdue(&target, on);
+                }
+            });
+        });
+    });
+}
+
+/// Finder in front with no window of its own over the others' (the user clicked the wallpaper), or
+/// this app in front (the widget in use).
+#[cfg(target_os = "macos")]
+fn on_desktop() -> bool {
+    use objc2::rc::Retained;
+    use objc2::runtime::AnyObject;
+    use objc2_foundation::{NSArray, NSDictionary, NSNumber, NSString};
+
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGWindowListCopyWindowInfo(option: u32, relative_to: u32) -> *mut NSArray<NSDictionary<NSString, AnyObject>>;
+    }
+    // On screen only, without the desktop's own windows, front to back.
+    const ON_SCREEN_ONLY: u32 = 1;
+    const NO_DESKTOP: u32 = 1 << 4;
+
+    let Some(front) = objc2_app_kit::NSWorkspace::sharedWorkspace().frontmostApplication() else { return false };
+    let pid = front.processIdentifier();
+    if pid == std::process::id() as i32 {
+        return true;
+    }
+    if front.bundleIdentifier().is_none_or(|id| id.to_string() != "com.apple.finder") {
+        return false;
+    }
+    objc2::rc::autoreleasepool(|_| {
+        // SAFETY: as in widget::system_widgets.
+        let Some(list) = (unsafe { Retained::from_raw(CGWindowListCopyWindowInfo(ON_SCREEN_ONLY | NO_DESKTOP, 0)) }) else { return false };
+        let number = |d: &NSDictionary<NSString, AnyObject>, key: &str| {
+            d.objectForKey(&NSString::from_str(key)).and_then(|v| v.downcast::<NSNumber>().ok()).map(|n| n.doubleValue())
+        };
+        // The first ordinary window from the top: Finder's own means one of its windows is in use.
+        list.iter().find(|info| number(info, "kCGWindowLayer") == Some(0.0)).is_none_or(|info| number(&info, "kCGWindowOwnerPID") != Some(pid as f64))
+    })
 }
 
 /// Mist, the Windows widget's Aura: no glass, only the window server's blur behind the page, which

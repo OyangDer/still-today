@@ -30,6 +30,8 @@ export interface BootInfo {
   glass: boolean;
   /** Whether the Mac draws Liquid Glass (macOS 26 and later) behind Aura and under the tab bar's selection. */
   liquid?: boolean;
+  /** Whether that glass is the system widgets' own as it stands (macOS 27 on), with nothing to lay over it. */
+  systemGlass?: boolean;
   /** The OS as Rust names it ("macos", "windows"); only the Tauri host sends it. */
   platform?: string;
   /** Whether this start is the Mac copy that has just moved itself into Applications. */

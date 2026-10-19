@@ -27,7 +27,7 @@ mac-notification-sys = "0.6"
 block2 = "0.6"
 objc2 = { version = "0.6", features = ["exception"] }
 objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSView", "NSColor", "NSResponder", "NSEvent", "NSWorkspace", "NSSound", "NSGlassEffectView", "NSAnimation", "NSAnimationContext", "NSGraphics", "NSRunningApplication", "NSImage", "NSBezierPath", "block2", "objc2-quartz-core"] }
-objc2-foundation = { version = "0.3", features = ["NSArray", "NSData", "NSDictionary", "NSValue", "NSError", "NSFileManager", "NSNotification", "NSOperation", "NSString", "NSURL", "NSUserNotification", "block2"] }
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSData", "NSDictionary", "NSValue", "NSError", "NSFileManager", "NSNotification", "NSOperation", "NSProcessInfo", "NSString", "NSURL", "NSUserNotification", "block2"] }
 objc2-quartz-core = { version = "0.3", features = ["CALayer", "CAMediaTimingFunction"] }
 # The display link that paces the window's glide and morph to the screen's refresh.
 objc2-core-video = { version = "0.3", default-features = false, features = ["std", "CVBase", "CVDisplayLink", "CVReturn", "block2"] }

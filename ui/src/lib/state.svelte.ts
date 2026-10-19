@@ -71,6 +71,8 @@ class Store {
   autostart = $state(false);
   /** Liquid Glass behind Aura and as the tab bar's selection, from the Mac host on macOS 26. */
   liquid = $state(false);
+  /** The Mac's glass is the system widgets' own as it stands (macOS 27 on): no veil over it in the dark look. */
+  systemGlass = $state(false);
   /** Running in the Mac host, which words a few things its own way. */
   mac = $state(false);
   /** Whether the window eases between sizes; null where the host has no switch for it. */
@@ -106,6 +108,7 @@ class Store {
     this.canvasAvatar = info.canvasAvatar;
     this.glass = info.glass;
     this.liquid = info.liquid ?? false;
+    this.systemGlass = info.systemGlass ?? false;
     // Auto may follow the system's light or dark appearance.
     matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => this.applyTheme());
     this.mac = info.platform === 'macos';
@@ -266,12 +269,12 @@ class Store {
     root.dataset.liquid = liquid ? 'on' : 'off';
     if (liquid && this.data.settings.clearGlass) {
       // The look alone decides how the card looks; the system's only decides which look auto is. Airy
-      // glass is the system widgets' own: white ink in either look, and the glass draws its own rim. The
-      // host dims the glass itself; in the dark look a thin grey over it keeps the wallpaper as clear as
-      // theirs (mac/src/glass.rs).
+      // glass is the system widgets' own: white ink in either look, and the glass draws its own rim. On
+      // macOS 26 the host dims the glass itself and, in the dark look, a thin grey over it keeps the
+      // wallpaper as clear as theirs; from 27 the glass is theirs as it stands (mac/src/glass.rs).
       root.dataset.ink = 'light';
       root.dataset.glass = 'on';
-      root.style.setProperty('--scrim', dark ? 'rgba(73, 73, 73, 0.2)' : 'transparent');
+      root.style.setProperty('--scrim', dark && !this.systemGlass ? 'rgba(73, 73, 73, 0.2)' : 'transparent');
       root.style.setProperty('--sheen', 'none');
       root.style.setProperty('--edge', 'none');
       // Its menus are the same glass a shade lighter in the light look, as its tab pill is; the dark look keeps
