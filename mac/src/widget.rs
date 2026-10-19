@@ -459,13 +459,23 @@ pub fn watch_mission_control(window: &WebviewWindow) {
     std::mem::forget(observer);
     std::mem::forget(sentinel);
 
+    // The backup reads the window list here, off the main thread, where it can't hold up a frame of the
+    // window's glide or morph; the main thread hears of it only when the widget is wrong, and looks again.
     let window = window.clone();
     std::thread::spawn(move || loop {
         std::thread::sleep(Duration::from_secs(2));
-        let target = window.clone();
-        let _ = window.run_on_main_thread(move || conceal(&target, !on_screen(number)));
+        // A worker thread has no pool of its own for what AppKit hands back autoreleased.
+        let hidden = objc2::rc::autoreleasepool(|_| !on_screen(number));
+        if hidden != CONCEALED.load(Ordering::Relaxed) {
+            let target = window.clone();
+            let _ = window.run_on_main_thread(move || conceal(&target, !on_screen(number)));
+        }
     });
 }
+
+/// Whether `conceal` has the widget hidden, for the backup check off the main thread.
+#[cfg(target_os = "macos")]
+static CONCEALED: AtomicBool = AtomicBool::new(false);
 
 #[cfg(not(target_os = "macos"))]
 pub fn watch_mission_control(_window: &WebviewWindow) {}
@@ -512,6 +522,7 @@ fn conceal(window: &WebviewWindow, hidden: bool) {
         return;
     }
     ns.setIgnoresMouseEvents(hidden);
+    CONCEALED.store(hidden, Ordering::Relaxed);
     let target = ns.retain();
     let changes = RcBlock::new(move |context: std::ptr::NonNull<NSAnimationContext>| {
         let context = unsafe { context.as_ref() };
