@@ -32,6 +32,8 @@ export interface BootInfo {
   liquid?: boolean;
   /** Whether that glass is the system widgets' own as it stands (macOS 27 on), with nothing to lay over it. */
   systemGlass?: boolean;
+  /** Whether the user is on the desktop the widget sits on, as the system's widgets tell it (macOS 27 on). */
+  desktop?: boolean;
   /** The OS as Rust names it ("macos", "windows"); only the Tauri host sends it. */
   platform?: string;
   /** Whether this start is the Mac copy that has just moved itself into Applications. */

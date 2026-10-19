@@ -91,6 +91,17 @@ fn glass_view(window: &WebviewWindow) -> Option<*mut objc2::runtime::AnyObject> 
 #[cfg(target_os = "macos")]
 static SUBDUED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
 
+/// Whether the user is on the desktop, as the widget's glass last took it (macOS 27 on).
+#[cfg(target_os = "macos")]
+pub fn desktop() -> bool {
+    system_glass() && !SUBDUED.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn desktop() -> bool {
+    false
+}
+
 #[cfg(target_os = "macos")]
 fn subdue(window: &WebviewWindow, on: bool) {
     use objc2::runtime::Bool;
@@ -115,6 +126,7 @@ fn subdue(window: &WebviewWindow, on: bool) {
 fn follow_desktop(window: &WebviewWindow) {
     use std::sync::atomic::Ordering;
     use std::sync::{Mutex, Once};
+    use tauri::Manager;
     static WINDOW: Mutex<Option<WebviewWindow>> = Mutex::new(None);
     static START: Once = Once::new();
     *WINDOW.lock().unwrap_or_else(|e| e.into_inner()) = Some(window.clone());
@@ -127,6 +139,8 @@ fn follow_desktop(window: &WebviewWindow) {
                 let on = !on_desktop(&target);
                 if SUBDUED.swap(on, Ordering::Relaxed) != on {
                     subdue(&target, on);
+                    // The page lays its reading ground in the light look while the user is on the desktop.
+                    crate::emit(target.app_handle(), "desktop", serde_json::Value::Bool(!on));
                 }
             });
         });
