@@ -1,8 +1,8 @@
 """Screenshots of the card in each look: Aura and the solid themes, with the system light and dark. On
 macOS 26 Aura is Liquid Glass, airy or Mist; on 13 to 15 it is the Popover material under Aura's
 Windows look, with the page's own tab pill. Runs after check.py against the same probe build; nothing
-here is checked. The shots, and what the page said about each look in looks.json, land in the folder
-given as the first argument.
+here is checked. The shots, and what the page said about each look and how smoothly it morphed in
+looks.json, land in the folder given as the first argument.
 """
 import json
 import os
@@ -20,6 +20,25 @@ const vars = Object.fromEntries(['--scrim', '--aura-fill', '--sheen', '--edge', 
 const card = document.querySelector('.card');
 return { ...root.dataset, ...vars, card: card && getComputedStyle(card).backgroundColor,
          pill: getComputedStyle(document.querySelector('.band .pill')).visibility };
+"""
+
+# How smoothly the page draws in this look: frames a second while still, then the morph to Calendar,
+# its frames, the sizes the window passed through and how long it took to get there.
+MORPH = """
+const still = performance.now() + 1000;
+let idle = 0;
+while (performance.now() < still) { await new Promise(requestAnimationFrame); idle++; }
+document.querySelectorAll('[role=tab]')[2].click();
+const start = performance.now(), sizes = [];
+let frames = 0, ms = null;
+while (performance.now() - start < 3000 && (ms === null || performance.now() - start < ms + 300)) {
+  await new Promise(requestAnimationFrame);
+  frames++;
+  const size = `${innerWidth}x${innerHeight}`;
+  if (sizes.at(-1) !== size) sizes.push(size);
+  if (size === '440x600' && ms === null) ms = Math.round(performance.now() - start);
+}
+return { idle, frames, sizes: sizes.length, ms };
 """
 
 
@@ -86,12 +105,15 @@ for name, dark, aura, mode, glass in LOOKS:
     system_dark(dark)
     time.sleep(2)
     settings = look(probe, aura, mode, glass)
-    for i, view in ((0, "overview"), (2, "calendar")):
-        probe.js(f"document.querySelectorAll('[role=tab]')[{i}].click();")
-        time.sleep(1.2)
-        shot(probe, f"{name}-{view}")
-    report[name] = {"settings": settings, "page": probe.js(PAGE), "window": probe.send({"native": "state"})}
+    probe.js("document.querySelectorAll('[role=tab]')[0].click();")
+    time.sleep(1.2)
+    shot(probe, f"{name}-overview")
+    morph = probe.js(MORPH)
+    time.sleep(0.6)
+    shot(probe, f"{name}-calendar")
+    report[name] = {"settings": settings, "page": probe.js(PAGE), "morph": morph, "window": probe.send({"native": "state"})}
     print(name, json.dumps(report[name]["page"]), flush=True)
+    print(name, "morph", json.dumps(morph), flush=True)
     probe.js("document.querySelectorAll('[role=tab]')[0].click();")
     time.sleep(0.9)
 
