@@ -7,9 +7,11 @@ looks.json, land in the folder given as the first argument.
 import json
 import os
 import socket
+import struct
 import subprocess
 import sys
 import time
+import zlib
 
 SHOTS = sys.argv[1] if len(sys.argv) > 1 else "looks"
 
@@ -55,6 +57,22 @@ class Probe:
         return self.send({"js": body}).get("r")
 
 
+def wallpaper(path, w=1024, h=768):
+    """Bands of colour, and black and white stripes between them, the same on every system: a runner's
+    desktop is plain black, behind which no material shows what it does."""
+    palette = [(255, 69, 58), (255, 204, 0), (0, 122, 255), (52, 199, 89), (175, 82, 222), (250, 250, 252)]
+    rows = bytearray()
+    for y in range(h):
+        rows.append(0)
+        stripes = (y // 96) % 3 == 2
+        for x in range(w):
+            rows += bytes(((0, 0, 0) if x // 16 % 2 else (255, 255, 255)) if stripes else palette[(x + y) // 80 % len(palette)])
+    chunk = lambda kind, data: struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+    with open(path, "wb") as f:
+        f.write(bytes.fromhex("89504e470d0a1a0a") + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+                + chunk(b"IDAT", zlib.compress(bytes(rows), 6)) + chunk(b"IEND", b""))
+
+
 def system_dark(on):
     subprocess.run(["osascript", "-e", f'tell application "System Events" to tell appearance preferences to set dark mode to {str(on).lower()}'],
                    check=False)
@@ -88,6 +106,10 @@ def shot(probe, name, pad=24):
 
 
 os.makedirs(SHOTS, exist_ok=True)
+paper = os.path.abspath(os.path.join(SHOTS, "wallpaper.png"))
+wallpaper(paper)
+subprocess.run(["osascript", "-e", f'tell application "System Events" to tell every desktop to set picture to "{paper}"'], check=False)
+time.sleep(3)
 probe = Probe()
 liquid = probe.js("return await window.__TAURI__.core.invoke('bridge', { m: 'boot', p: {} })").get("liquid")
 LIGHT, DARK, SYSTEM = "/^(浅色|Light)$/", "/^(深色|Dark)$/", "/^(跟随系统|System)$/"
