@@ -424,8 +424,8 @@ fn level(window: &WebviewWindow, topmost: bool) {
 /// Hides the widget while Mission Control is open, as the system's widgets are. Mission Control
 /// tells no one it is open, but it hides transient windows, so a 1pt transparent one watches for it:
 /// it drops off screen then and only then (Show Desktop and other windows covering it leave it on
-/// screen), and its occlusion changes as it does. A slow check backs the notification up, so the
-/// widget can't stay hidden on a missed one.
+/// screen; macOS 14 and 15 keep it listed but shrink it to nothing), and its occlusion changes as it
+/// does. A slow check backs the notification up, so the widget can't stay hidden on a missed one.
 #[cfg(target_os = "macos")]
 pub fn watch_mission_control(window: &WebviewWindow) {
     use block2::RcBlock;
@@ -470,7 +470,8 @@ pub fn watch_mission_control(window: &WebviewWindow) {
 #[cfg(not(target_os = "macos"))]
 pub fn watch_mission_control(_window: &WebviewWindow) {}
 
-// Whether the Window Server has a window of ours on screen.
+// Whether the Window Server shows a window of ours: on screen, and not shrunk to nothing, as Mission
+// Control leaves the watcher on macOS 14 and 15.
 #[cfg(target_os = "macos")]
 fn on_screen(number: isize) -> bool {
     use objc2::rc::Retained;
@@ -485,9 +486,14 @@ fn on_screen(number: isize) -> bool {
     // SAFETY: as in system_widgets.
     let Some(list) = (unsafe { Retained::from_raw(CGWindowListCopyWindowInfo(INCLUDING_WINDOW, number as u32)) }) else { return true };
     let Some(info) = list.firstObject() else { return true };
-    info.objectForKey(&NSString::from_str("kCGWindowIsOnscreen"))
-        .and_then(|v| v.downcast::<NSNumber>().ok())
-        .is_some_and(|on| on.boolValue())
+    let value = |d: &NSDictionary<NSString, AnyObject>, key: &str| d.objectForKey(&NSString::from_str(key)).and_then(|v| v.downcast::<NSNumber>().ok());
+    let listed = value(&info, "kCGWindowIsOnscreen").is_some_and(|on| on.boolValue());
+    let shrunk = info.objectForKey(&NSString::from_str("kCGWindowBounds")).and_then(|b| b.downcast::<NSDictionary>().ok()).is_some_and(|bounds| {
+        // SAFETY: as in system_widgets.
+        let bounds = unsafe { &*(Retained::as_ptr(&bounds) as *const NSDictionary<NSString, AnyObject>) };
+        ["Width", "Height"].iter().any(|key| value(bounds, key).is_some_and(|n| n.doubleValue() < 1.0))
+    });
+    listed && !shrunk
 }
 
 // Hidden, the widget is clear and lets clicks through, and keeps its place and level. Mission Control
