@@ -1,4 +1,3 @@
-import { tick } from 'svelte';
 import { auraLook, mistLook } from './aura';
 import { isCanvasFeed } from './agenda';
 import {
@@ -57,17 +56,6 @@ const FEED_FUTURE_DAYS = 400;
 /** How far back the announcement list reaches. */
 const ANNOUNCEMENT_DAYS = 14;
 
-/** The reading ground's porcelain (app.css's Porcelain) at part strength, and the ink a step darker. */
-const READING: Record<string, string> = {
-  '--bg': 'rgba(250, 249, 246, 0.72)',
-  '--nav': 'rgba(243, 243, 238, 0.35)',
-  '--line': 'rgba(37, 45, 41, 0.1)',
-  '--muted': '#4e5550',
-  '--faint': '#6c736c',
-  '--warm': '#7f501f',
-};
-const READING_INK = Object.keys(READING);
-
 class Store {
   data = $state<Data>(emptyData('zh'));
   now = $state(new Date());
@@ -85,10 +73,6 @@ class Store {
   liquid = $state(false);
   /** The Mac's glass is the system widgets' own as it stands (macOS 27 on): no veil over it in the dark look. */
   systemGlass = $state(false);
-  /** The user is on the desktop the widget sits on, as the system's widgets tell it (macOS 27 on, from the host). */
-  desktop = $state(false);
-  /** The light look's reading ground is down: frosted porcelain over the glass while the user is on the desktop. */
-  reading = $state(false);
   /** Running in the Mac host, which words a few things its own way. */
   mac = $state(false);
   /** Whether the window eases between sizes; null where the host has no switch for it. */
@@ -125,7 +109,6 @@ class Store {
     this.glass = info.glass;
     this.liquid = info.liquid ?? false;
     this.systemGlass = info.systemGlass ?? false;
-    this.desktop = info.desktop ?? false;
     // Auto may follow the system's light or dark appearance.
     matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => this.applyTheme());
     this.mac = info.platform === 'macos';
@@ -175,7 +158,6 @@ class Store {
       this.glass = d as boolean;
       this.applyTheme();
     });
-    on('desktop', (d) => this.setDesktop(d as boolean));
     on('tray', (d) => this.onTray(d as string));
     on('shown', () => this.setVisible(true));
     on('hidden', () => this.setVisible(false));
@@ -272,9 +254,7 @@ class Store {
 
   // ---- appearance --------------------------------------------------------------------------
 
-  /** The page's look, and the host's material behind it unless `material` is false (the host lays its
-   *  glass afresh each time, which the reading ground's comings and goings have no need of). */
-  applyTheme(material = true): void {
+  applyTheme(): void {
     const { aura, mode } = this.data.settings;
     const root = document.documentElement;
     // Auto takes the wallpaper's side behind Aura where the host samples it, else the system's.
@@ -287,20 +267,7 @@ class Store {
     root.dataset.theme = aura ? 'aura' : dark ? 'dark' : 'light';
     const liquid = aura && this.liquid;
     root.dataset.liquid = liquid ? 'on' : 'off';
-    for (const p of READING_INK) root.style.removeProperty(p);
-    this.reading = this.readingWith(dark);
-    if (this.reading) {
-      // On macOS 27 the system's text widgets lay their own ground while the user is on the desktop, and
-      // go back to glass with them. The light look's white ink then lost the wallpaper behind it: over a
-      // photo, 2.2:1 at the clock. Frosted porcelain, Porcelain's ink a step darker so it holds over
-      // whatever the frost lets through, brings that to 10.8:1 and still shows the wallpaper's colours.
-      // The dark glass reads as it is (9:1 and more), so the dark look stays glass.
-      root.dataset.theme = 'light';
-      root.dataset.ink = 'dark';
-      root.dataset.glass = 'on';
-      for (const p of ['--scrim', '--sheen', '--edge', '--pop', '--pop-shadow']) root.style.removeProperty(p);
-      for (const [p, v] of Object.entries(READING)) root.style.setProperty(p, v);
-    } else if (liquid && this.data.settings.clearGlass) {
+    if (liquid && this.data.settings.clearGlass) {
       // The look alone decides how the card looks; the system's only decides which look auto is. Airy
       // glass is the system widgets' own: white ink in either look, and the glass draws its own rim. On
       // macOS 26 the host dims the glass itself and, in the dark look, a thin grey over it keeps the
@@ -355,28 +322,7 @@ class Store {
       root.style.removeProperty('--edge');
       delete root.dataset.ink;
     }
-    if (material) void call('material', { aura, dark, auto: mode === 'auto', clear: this.data.settings.clearGlass });
-  }
-
-  /** Whether the light look's reading ground is down, with the system's look `dark` or not. */
-  private readingWith(dark: boolean): boolean {
-    const { aura, clearGlass } = this.data.settings;
-    return this.systemGlass && this.liquid && aura && clearGlass && !dark && this.desktop;
-  }
-
-  /** The user came to the desktop or left it: the reading ground fades in or out with the system's widgets. */
-  setDesktop(on: boolean): void {
-    this.desktop = on;
-    const { mode } = this.data.settings;
-    const dark = mode === 'auto' ? matchMedia('(prefers-color-scheme: dark)').matches : mode === 'dark';
-    if (this.readingWith(dark) === this.reading) return;
-    const change = async () => {
-      this.applyTheme(false);
-      await tick();
-    };
-    const doc = document as Document & { startViewTransition?: (update: () => Promise<void>) => unknown };
-    if (doc.startViewTransition && this.visible) doc.startViewTransition(change);
-    else void change();
+    void call('material', { aura, dark, auto: mode === 'auto', clear: this.data.settings.clearGlass });
   }
 
   setAppearance(change: Partial<Pick<Settings, 'aura' | 'clearGlass' | 'mode'>>): void {

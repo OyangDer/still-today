@@ -120,7 +120,6 @@ fn boot(app: &AppHandle, host: &Host) -> Result<Value, String> {
         "glass": widget::glass(),
         "liquid": glass::available(),
         "systemGlass": glass::system_glass(),
-        "desktop": glass::desktop(),
         "platform": std::env::consts::OS,
         "morph": host.widget.morph.load(std::sync::atomic::Ordering::Relaxed),
         // Started again from Applications by install::relocate.

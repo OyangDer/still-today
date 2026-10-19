@@ -403,9 +403,3 @@ textarea.input {
     transition-duration: 0ms !important;
   }
 }
-
-/* The reading ground fades in and out over about as long as the system's widgets take to change. */
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation-duration: 300ms;
-}
