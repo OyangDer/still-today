@@ -25,7 +25,6 @@ pub fn apply(window: &WebviewWindow, radius: f64, dark: bool) -> bool {
         if system_glass() {
             widget_glass_27(window);
             window_blur(window, 0);
-            follow_desktop(window);
         } else {
             widget_glass(window, dark);
             window_blur(window, WIDGET_BLUR);
@@ -50,7 +49,10 @@ pub fn system_glass() -> bool {
 
 /// The variant the system's widgets wear on macOS 27, matched beside them on 27.0.1 over plain and
 /// striped wallpapers: the same colour over nine plain ones, the same blur, and the same bend at the
-/// rim, at the slider's ends and middle alike.
+/// rim, at the slider's ends and middle alike. That is their full-colour look, while the user is on the
+/// desktop. In an app they go subdued, a shade dimmer and their content monochrome; the glass alone
+/// could follow (the private subdued state), but only by watching the window list all day from a guess
+/// at when they change, a beat behind them, so the widget keeps the look it is seen beside them in.
 #[cfg(target_os = "macos")]
 const WIDGET_VARIANT_27: isize = 5;
 
@@ -66,7 +68,6 @@ fn widget_glass_27(window: &WebviewWindow) {
             let _: () = msg_send![glass, set_variant: WIDGET_VARIANT_27];
         }
     }
-    subdue(window, SUBDUED.load(std::sync::atomic::Ordering::Relaxed));
 }
 
 /// The glass view window-vibrancy added to the window, found by its tag.
@@ -83,139 +84,6 @@ fn glass_view(window: &WebviewWindow) -> Option<*mut objc2::runtime::AnyObject> 
         }
         let glass: *mut AnyObject = msg_send![content, viewWithTag: GLASS_VIEW_TAG];
         (!glass.is_null()).then_some(glass)
-    }
-}
-
-/// Whether the widget's glass wears the subdued look, as the system's widgets do while the desktop is
-/// not what the user is in: dimmer and a little more blurred.
-#[cfg(target_os = "macos")]
-static SUBDUED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
-
-#[cfg(target_os = "macos")]
-fn subdue(window: &WebviewWindow, on: bool) {
-    use objc2::runtime::Bool;
-    use objc2::{msg_send, sel};
-    let Some(glass) = glass_view(window) else { return };
-    // SAFETY: the live glass view on the main thread. Key-value coding converts the number to whatever
-    // the private setter takes; it is only used where AppKit has the setter.
-    unsafe {
-        let known: Bool = msg_send![glass, respondsToSelector: sel!(set_subduedState:)];
-        if known.as_bool() {
-            let value = objc2_foundation::NSNumber::new_isize(on as isize);
-            let key = objc2_foundation::NSString::from_str("_subduedState");
-            let _: () = msg_send![glass, setValue: &*value, forKey: &*key];
-        }
-    }
-}
-
-/// The system's widgets wear full colour while the user is on the desktop itself, and the subdued look
-/// while they are in an app: the widget's glass follows, checked twice a second. On the desktop is
-/// Finder in front with none of its windows over the others, or the widget itself in use.
-#[cfg(target_os = "macos")]
-fn follow_desktop(window: &WebviewWindow) {
-    use std::sync::atomic::Ordering;
-    use std::sync::{Mutex, Once};
-    static WINDOW: Mutex<Option<WebviewWindow>> = Mutex::new(None);
-    static START: Once = Once::new();
-    *WINDOW.lock().unwrap_or_else(|e| e.into_inner()) = Some(window.clone());
-    START.call_once(|| {
-        std::thread::spawn(|| loop {
-            std::thread::sleep(std::time::Duration::from_millis(500));
-            let Some(window) = WINDOW.lock().unwrap_or_else(|e| e.into_inner()).clone() else { continue };
-            let target = window.clone();
-            let _ = window.run_on_main_thread(move || {
-                let on = !on_desktop(&target);
-                if SUBDUED.swap(on, Ordering::Relaxed) != on {
-                    subdue(&target, on);
-                }
-            });
-        });
-    });
-}
-
-/// Whether the user is on the desktop the widget sits on, as the system's widgets tell it: no ordinary
-/// window on that display (none open there, or a click on the wallpaper moved them aside), whichever
-/// app is in front, even on another display. Stage Manager's strip counts: while its thumbnails show
-/// the widgets stay subdued, and revealing the desktop slides it away. Also Finder in front with none
-/// of its windows topmost there (the wallpaper clicked with the windows left in place), or this app in
-/// front (the widget in use). Watched beside the widgets on macOS 27.0.1, with Stage Manager and two
-/// displays.
-#[cfg(target_os = "macos")]
-fn on_desktop(window: &WebviewWindow) -> bool {
-    use objc2::rc::Retained;
-    use objc2::runtime::AnyObject;
-    use objc2_foundation::{NSArray, NSDictionary, NSNumber, NSString};
-
-    #[link(name = "CoreGraphics", kind = "framework")]
-    extern "C" {
-        fn CGWindowListCopyWindowInfo(option: u32, relative_to: u32) -> *mut NSArray<NSDictionary<NSString, AnyObject>>;
-    }
-    // On screen only, without the desktop's own windows, front to back.
-    const ON_SCREEN_ONLY: u32 = 1;
-    const NO_DESKTOP: u32 = 1 << 4;
-
-    let Some(front) = objc2_app_kit::NSWorkspace::sharedWorkspace().frontmostApplication() else { return false };
-    let pid = front.processIdentifier();
-    if pid == std::process::id() as i32 {
-        return true;
-    }
-    let finder = front.bundleIdentifier().is_some_and(|id| id.to_string() == "com.apple.finder");
-    // The widget's display in the window list's points: top-left origin, the main display's.
-    let Ok(Some(display)) = window.current_monitor() else { return false };
-    let scale = display.scale_factor();
-    let (left, top) = (display.position().x as f64 / scale, display.position().y as f64 / scale);
-    let (right, bottom) = (left + display.size().width as f64 / scale, top + display.size().height as f64 / scale);
-    objc2::rc::autoreleasepool(|_| {
-        // SAFETY: as in widget::system_widgets.
-        let Some(list) = (unsafe { Retained::from_raw(CGWindowListCopyWindowInfo(ON_SCREEN_ONLY | NO_DESKTOP, 0)) }) else { return false };
-        let number = |d: &NSDictionary<NSString, AnyObject>, key: &str| {
-            d.objectForKey(&NSString::from_str(key)).and_then(|v| v.downcast::<NSNumber>().ok()).map(|n| n.doubleValue())
-        };
-        let ordinary = |info: &NSDictionary<NSString, AnyObject>| {
-            let owner = info.objectForKey(&NSString::from_str("kCGWindowOwnerName")).and_then(|v| v.downcast::<NSString>().ok());
-            let Some(bounds) = info.objectForKey(&NSString::from_str("kCGWindowBounds")).and_then(|b| b.downcast::<NSDictionary>().ok()) else { return false };
-            // SAFETY: as in widget::system_widgets.
-            let bounds = unsafe { &*(Retained::as_ptr(&bounds) as *const NSDictionary<NSString, AnyObject>) };
-            let [x, y, w, h] = ["X", "Y", "Width", "Height"].map(|key| number(bounds, key).unwrap_or(0.0));
-            // Windows moved aside to reveal the desktop leave only a sliver on the display.
-            let shown = (x + w).min(right) - x.max(left);
-            let shown = shown.max(0.0) * ((y + h).min(bottom) - y.max(top)).max(0.0);
-            number(info, "kCGWindowLayer") == Some(0.0)
-                && number(info, "kCGWindowAlpha").is_some_and(|a| a > 0.0)
-                && number(info, "kCGWindowOwnerPID") != Some(std::process::id() as f64)
-                // Stage Manager's own: the strip's app icons and overlays.
-                && owner.is_none_or(|o| o.to_string() != "WindowManager")
-                && shown > 0.0
-                && shown >= 0.25 * w * h
-        };
-        match list.iter().find(|info| ordinary(info)) {
-            None => true,
-            // Finder in front over others' windows: the wallpaper was clicked. Under Stage Manager a click
-            // there moves the windows into the strip instead, and with the strip in view the widgets stay
-            // subdued whoever is in front.
-            Some(topmost) => finder && !stage_manager() && number(&topmost, "kCGWindowOwnerPID") != Some(pid as f64),
-        }
-    })
-}
-
-/// Whether Stage Manager is on, as System Settings keeps it.
-#[cfg(target_os = "macos")]
-fn stage_manager() -> bool {
-    use objc2::rc::Retained;
-    use objc2::runtime::AnyObject;
-    use objc2_foundation::{NSNumber, NSString};
-    #[link(name = "CoreFoundation", kind = "framework")]
-    extern "C" {
-        fn CFPreferencesAppSynchronize(app: *const AnyObject) -> u8;
-        fn CFPreferencesCopyAppValue(key: *const AnyObject, app: *const AnyObject) -> *mut AnyObject;
-    }
-    let (app, key) = (NSString::from_str("com.apple.WindowManager"), NSString::from_str("GloballyEnabled"));
-    // SAFETY: NSStrings are toll-free CFStrings; a Copy function hands over its own reference, if any.
-    unsafe {
-        CFPreferencesAppSynchronize(Retained::as_ptr(&app).cast());
-        Retained::from_raw(CFPreferencesCopyAppValue(Retained::as_ptr(&key).cast(), Retained::as_ptr(&app).cast()))
-            .and_then(|v| v.downcast::<NSNumber>().ok())
-            .is_some_and(|on| on.boolValue())
     }
 }
 
