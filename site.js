@@ -22,13 +22,25 @@ fetch('https://api.github.com/repos/OyangDer/still-today/releases?per_page=30')
       const file = files.find((a) => pattern.test(a.name));
       if (!file) return;
       const version = file.name.match(/\d+\.\d+\.\d+/)[0];
-      document.querySelectorAll(links).forEach((a) => (a.href = file.browser_download_url));
+      document.querySelectorAll(links).forEach((a) => ((a.href = file.browser_download_url), (a.dataset.file = '')));
       const meta = `v${version} · ${(file.size / 1048576).toFixed(1)} MB · ${system}`;
       document.querySelectorAll(metas).forEach((m) => (m.textContent = meta));
     };
     offer(/-setup\.exe$/, '[data-download]', '[data-meta]', 'Windows 10 / 11');
     offer(/\.dmg$/, '[data-download-mac]', '[data-meta-mac]', 'macOS 13+');
   });
+
+// A download starts at once; alongside it, a note says what the system will ask on the way in. Only once
+// a button is the file itself: before that it is the Releases page, and nothing has started.
+const note = document.querySelector('dialog.dlnote');
+const tell = (os) => (e) => {
+  if (!note || !('file' in e.currentTarget.dataset) || !note.showModal) return;
+  note.dataset.show = os;
+  note.showModal();
+};
+document.querySelectorAll('[data-download]').forEach((a) => a.addEventListener('click', tell('win')));
+document.querySelectorAll('[data-download-mac]').forEach((a) => a.addEventListener('click', tell('mac')));
+note?.addEventListener('click', (e) => (e.target === note || e.target.closest('[data-close], a')) && note.close());
 
 document.querySelectorAll('[data-copy]').forEach((b) =>
   b.addEventListener('click', async () => {

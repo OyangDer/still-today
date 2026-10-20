@@ -178,7 +178,7 @@
         <div class="n">2</div>
         <h3>如果系统拦了一下</h3>
         <p><b>Windows</b>：提示「Windows 已保护你的电脑」时，点 <b>更多信息</b>，再点 <b>仍要运行</b>。</p>
-        <p><b>Mac</b>：第一次打开被拦下时，到「系统设置 → 隐私与安全性」，往下翻，点 <b>仍要打开</b>。</p>
+        <p><b>Mac</b>：第一次打开被拦下时，到「系统设置 → 隐私与安全性」，往下翻，点 <b>仍要打开</b>。更新后或重启后可能会要你输入钥匙串密码（Mac 的开机密码），这是正常的，输入后点 <b>始终允许</b>。</p>
         <p>这是因为安装包还没有代码签名和苹果公证，只有第一次需要这样做。</p>
       </div>
       <div class="card reveal">
@@ -306,6 +306,24 @@
     <p class="legal">Canvas 是 Instructure, Inc. 的商标。Still Today 是独立的开源项目，与 Instructure 无关。</p>
   </div>
 </footer>
+
+<dialog class="dlnote" aria-labelledby="dlnote-title">
+  <h3 id="dlnote-title">下载已开始，装之前看一眼</h3>
+  <ol data-for="mac">
+    <li>打开 .dmg，把 Still Today 拖进「应用程序」。</li>
+    <li><b>第一次打开会被拦下</b>：安装包还没有经过苹果公证。到「系统设置 → 隐私与安全性」，往下翻，点 <b>仍要打开</b>。只需要一次。</li>
+    <li><b>更新后或重启后可能要输入钥匙串密码</b>，也就是 Mac 的开机密码。这是正常的：Canvas 令牌存在钥匙串里。输入后点 <b>始终允许</b>，以后就不会每次都问。</li>
+  </ol>
+  <ol data-for="win">
+    <li><b>浏览器提示「不常下载」</b>：选择 <b>保留</b>（Edge 里点 ··· → 保留）。安装包没问题，只是还没有代码签名。</li>
+    <li><b>Windows 提示「已保护你的电脑」</b>：点 <b>更多信息</b>，再点 <b>仍要运行</b>。只需要一次。</li>
+    <li>运行安装包即可，可以直接覆盖安装，数据会保留。</li>
+  </ol>
+  <div class="dlnote-foot">
+    <a href="#install">安装步骤</a>
+    <button class="btn" type="button" data-close autofocus>知道了</button>
+  </div>
+</dialog>
 
 <script src="site.js"></script>
 </body>

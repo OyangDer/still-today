@@ -325,3 +325,28 @@ footer .legal { flex-basis: 100%; margin: 6px 0 0; font-size: 12.5px; }
   .closing { margin: 96px 8px 0; padding: 80px 24px; border-radius: 28px; }
   footer .right { margin-left: 0; }
 }
+
+/* ---- download note ---- */
+.dlnote {
+  width: min(480px, calc(100vw - 32px));
+  padding: 28px 28px 22px;
+  border: 0;
+  border-radius: 22px;
+  background: var(--raised);
+  color: var(--ink);
+  box-shadow: 0 40px 80px -30px rgba(22, 35, 43, 0.5), 0 0 0 1px rgba(22, 35, 43, 0.06);
+  font-size: 15px;
+  line-height: 1.7;
+}
+.dlnote[open] { animation: dlnote-in 0.35s var(--ease-out); }
+.dlnote::backdrop { background: rgba(22, 35, 43, 0.28); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.dlnote h3 { margin: 0 0 14px; font-size: 19px; line-height: 1.4; }
+.dlnote ol { display: none; margin: 0; padding-left: 1.3em; }
+.dlnote[data-show="mac"] [data-for="mac"], .dlnote[data-show="win"] [data-for="win"] { display: block; }
+.dlnote li { margin: 0 0 10px; color: var(--muted); }
+.dlnote li b { color: var(--ink); font-weight: 600; }
+.dlnote-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 18px; }
+.dlnote-foot a { font-size: 14px; color: var(--accent); text-decoration: none; }
+.dlnote-foot .btn { padding: 10px 22px; font-size: 15px; }
+@keyframes dlnote-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } }
+@media (prefers-reduced-motion: reduce) { .dlnote[open] { animation: none; } }

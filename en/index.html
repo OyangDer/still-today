@@ -178,7 +178,7 @@
         <div class="n">2</div>
         <h3>If your computer steps in</h3>
         <p><b>Windows</b>: when you see “Windows protected your PC”, click <b>More info</b>, then <b>Run anyway</b>.</p>
-        <p><b>Mac</b>: if it's blocked the first time, go to System Settings → Privacy &amp; Security, scroll down and click <b>Open Anyway</b>.</p>
+        <p><b>Mac</b>: if it's blocked the first time, go to System Settings → Privacy &amp; Security, scroll down and click <b>Open Anyway</b>. After an update or a restart, macOS may ask for your Keychain password (your Mac login password); that's expected, so enter it and choose <b>Always Allow</b>.</p>
         <p>The app isn't code-signed or notarized yet. You only do this once.</p>
       </div>
       <div class="card reveal">
@@ -306,6 +306,24 @@
     <p class="legal">Canvas is a trademark of Instructure, Inc. Still Today is an independent open-source project, not affiliated with Instructure.</p>
   </div>
 </footer>
+
+<dialog class="dlnote" aria-labelledby="dlnote-title">
+  <h3 id="dlnote-title">Your download has started. Before you install:</h3>
+  <ol data-for="mac">
+    <li>Open the .dmg and drag Still Today into Applications.</li>
+    <li><b>The first launch is blocked</b>: it isn't notarized by Apple yet. Go to System Settings → Privacy &amp; Security, scroll down and click <b>Open Anyway</b>. You only do this once.</li>
+    <li><b>After an update or a restart, macOS may ask for your Keychain password</b>, which is your Mac login password. That's expected: your Canvas token is kept in the Keychain. Enter it and choose <b>Always Allow</b> so it doesn't ask every time.</li>
+  </ol>
+  <ol data-for="win">
+    <li><b>If your browser says the file isn't commonly downloaded</b>, choose <b>Keep</b> (in Edge: ··· → Keep). The installer is fine; it just isn't code-signed yet.</li>
+    <li><b>If you see “Windows protected your PC”</b>, click <b>More info</b>, then <b>Run anyway</b>. You only do this once.</li>
+    <li>Run the installer, over your current install if you have one; your data is kept.</li>
+  </ol>
+  <div class="dlnote-foot">
+    <a href="#install">Install steps</a>
+    <button class="btn" type="button" data-close autofocus>Got it</button>
+  </div>
+</dialog>
 
 <script src="../site.js"></script>
 </body>
