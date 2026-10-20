@@ -15,7 +15,7 @@ const day = (offset: number, h = 23, m = 59) => {
 const courses = [
   { id: 1, course_code: 'PMGT5850 (ALL)', name: 'Project Management Capstone' },
   { id: 2, course_code: 'PMGT5889 (ALL)', name: 'Project Risk' },
-  { id: 3, course_code: '48430 Fundamentals of C Programming - Spring 2026', name: 'Fundamentals of C Programming' },
+  { id: 3, course_code: 'PMGT5871', name: 'Research Methods' },
 ];
 
 const assignments: Record<number, unknown[]> = {
