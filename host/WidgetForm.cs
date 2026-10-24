@@ -43,6 +43,9 @@ internal sealed class WidgetForm : Form
     // Kept in a field for as long as the hook lives: Windows calls back through it.
     private Native.WinEventProc _onRestored;
     private IntPtr _restoredHook;
+    // Keeps the widget owned by the desktop icon view on Windows 11 24H2+, so Show Desktop
+    // raises it with the desktop instead of covering it (see DesktopLayer).
+    private System.Windows.Forms.Timer _desktopLayerTimer;
 
     public WidgetForm(string dataDir)
     {
@@ -154,6 +157,32 @@ internal sealed class WidgetForm : Form
         Native.SetWindowPos(Handle, _topmost ? Native.HWND_TOPMOST : Native.HWND_BOTTOM, 0, 0, 0, 0,
             Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
         if (_controller != null) _controller.IsVisible = true;
+        AttachDesktopLayer();
+    }
+
+    // Windows 11 24H2+: keep the window in the desktop owner band. Attaching is idempotent;
+    // the timer only repairs the owner after an Explorer restart invalidated it.
+    private void AttachDesktopLayer()
+    {
+        if (!DesktopLayer.IsSupported || !IsHandleCreated) return;
+        DesktopLayer.Attach(Handle);
+        if (_desktopLayerTimer != null) return;
+        _desktopLayerTimer = new System.Windows.Forms.Timer { Interval = 3000 };
+        _desktopLayerTimer.Tick += (_, _) =>
+        {
+            if (IsHandleCreated) DesktopLayer.EnsureAttached(Handle);
+        };
+        _desktopLayerTimer.Start();
+    }
+
+    /// <summary>
+    /// Called when Explorer broadcasts TaskbarCreated, to re-own the window after an
+    /// Explorer restart invalidated the desktop icon view handle.
+    /// </summary>
+    public void EnsureDesktopLayer()
+    {
+        if (!IsHandleCreated) return;
+        DesktopLayer.EnsureAttached(Handle);
     }
 
     /// <summary>
@@ -450,6 +479,19 @@ internal sealed class WidgetForm : Form
         _controller?.MoveFocus(CoreWebView2MoveFocusReason.Programmatic);
     }
 
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        // A handle recreation (rare, e.g. after a DWM/shell event) would drop the owner.
+        if (_ready) AttachDesktopLayer();
+    }
+
+    protected override void OnHandleDestroyed(EventArgs e)
+    {
+        DesktopLayer.Forget();
+        base.OnHandleDestroyed(e);
+    }
+
     protected override void WndProc(ref Message m)
     {
         switch (m.Msg)
@@ -545,7 +587,14 @@ internal sealed class WidgetForm : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) _controller?.Close();
+        if (disposing)
+        {
+            _desktopLayerTimer?.Stop();
+            _desktopLayerTimer?.Dispose();
+            _desktopLayerTimer = null;
+            if (IsHandleCreated) DesktopLayer.Detach(Handle);
+            _controller?.Close();
+        }
         if (_restoredHook != IntPtr.Zero) Native.UnhookWinEvent(_restoredHook);
         base.Dispose(disposing);
     }
