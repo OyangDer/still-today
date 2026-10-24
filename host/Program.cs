@@ -47,6 +47,7 @@ internal static class Program
             form.Present();
             bridge.Emit("shown");
         };
+        doorbell.ExplorerRestarted += form.EnsureDesktopLayer;
         tray.NoticeClicked += tag =>
         {
             form.Present();
@@ -94,18 +95,23 @@ internal static class Program
     private sealed class Doorbell : NativeWindow
     {
         private readonly int _message;
+        private readonly int _taskbarCreated;
 
         public Doorbell(int message)
         {
             _message = message;
+            _taskbarCreated = Native.RegisterWindowMessage("TaskbarCreated");
             CreateHandle(new CreateParams());
         }
 
         public event Action Rung;
+        /// <summary>Explorer restarted; the desktop icon view handle is new.</summary>
+        public event Action ExplorerRestarted;
 
         protected override void WndProc(ref Message m)
         {
             if (m.Msg == _message) Rung?.Invoke();
+            else if (_taskbarCreated != 0 && m.Msg == _taskbarCreated) ExplorerRestarted?.Invoke();
             base.WndProc(ref m);
         }
     }
