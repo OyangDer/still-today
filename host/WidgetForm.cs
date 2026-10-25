@@ -43,6 +43,11 @@ internal sealed class WidgetForm : Form
     // Kept in a field for as long as the hook lives: Windows calls back through it.
     private Native.WinEventProc _onRestored;
     private IntPtr _restoredHook;
+    // Keeps the widget visible only while Show Desktop has actually raised the desktop.
+    private Native.WinEventProc _onForeground;
+    private IntPtr _foregroundHook;
+    private System.Windows.Forms.Timer _desktopStateTimer;
+    private bool _desktopShown;
 
     public WidgetForm(string dataDir)
     {
@@ -104,6 +109,15 @@ internal sealed class WidgetForm : Form
         _onRestored = OnWindowRestored;
         _restoredHook = Native.SetWinEventHook(Native.EVENT_SYSTEM_MINIMIZEEND, Native.EVENT_SYSTEM_MINIMIZEEND, IntPtr.Zero,
             _onRestored, 0, 0, Native.WINEVENT_OUTOFCONTEXT | Native.WINEVENT_SKIPOWNPROCESS);
+        if (DesktopState.IsSupported)
+        {
+            _onForeground = OnForegroundChanged;
+            _foregroundHook = Native.SetWinEventHook(Native.EVENT_SYSTEM_FOREGROUND, Native.EVENT_SYSTEM_FOREGROUND, IntPtr.Zero,
+                _onForeground, 0, 0, Native.WINEVENT_OUTOFCONTEXT);
+            _desktopStateTimer = new System.Windows.Forms.Timer { Interval = 150 };
+            _desktopStateTimer.Tick += (_, _) => UpdateDesktopState();
+            _desktopStateTimer.Start();
+        }
 
         var options = new CoreWebView2EnvironmentOptions { AreBrowserExtensionsEnabled = false };
         var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(_dataDir, "WebView2"), options);
@@ -151,7 +165,8 @@ internal sealed class WidgetForm : Form
     {
         if (!_ready) return;
         Visible = true;
-        Native.SetWindowPos(Handle, _topmost ? Native.HWND_TOPMOST : Native.HWND_BOTTOM, 0, 0, 0, 0,
+        var after = (_topmost || _desktopShown) ? Native.HWND_TOPMOST : Native.HWND_BOTTOM;
+        Native.SetWindowPos(Handle, after, 0, 0, 0, 0,
             Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
         if (_controller != null) _controller.IsVisible = true;
     }
@@ -176,12 +191,45 @@ internal sealed class WidgetForm : Form
         base.OnDeactivate(e);
         if (!_presented) return;
         _presented = false;
-        Native.SetWindowPos(Handle, Native.HWND_BOTTOM, 0, 0, 0, 0, Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
+        var after = _desktopShown ? Native.HWND_TOPMOST : Native.HWND_BOTTOM;
+        Native.SetWindowPos(Handle, after, 0, 0, 0, 0, Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
+    }
+
+    private void OnForegroundChanged(IntPtr hook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint thread, uint time)
+    {
+        if (idObject == Native.OBJID_WINDOW) UpdateDesktopState();
+    }
+
+    private void UpdateDesktopState()
+    {
+        if (!DesktopState.IsSupported || !IsHandleCreated) return;
+        var raised = DesktopState.IsDesktopRaised();
+        if (raised != _desktopShown)
+        {
+            _desktopShown = raised;
+            if (!raised && !_topmost && _ready && Visible)
+            {
+                Native.SetWindowPos(Handle, Native.HWND_NOTOPMOST, 0, 0, 0, 0,
+                    Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
+                Native.SetWindowPos(Handle, Native.HWND_BOTTOM, 0, 0, 0, 0,
+                    Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
+            }
+        }
+        // Explorer can finish raising Progman after the first "raised" sample; keep the widget
+        // above it for as long as Show Desktop is active instead of raising it just once.
+        if (_desktopShown && !_topmost && _ready && Visible)
+        {
+            if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
+            // Rainmeter lifts a helper into the topmost band for as long as Show Desktop is
+            // active; the widget does the same, then drops the style when the desktop goes away.
+            Native.SetWindowPos(Handle, Native.HWND_TOPMOST, 0, 0, 0, 0,
+                Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
+        }
     }
 
     private void OnWindowRestored(IntPtr hook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint thread, uint time)
     {
-        if (idObject != Native.OBJID_WINDOW || _topmost || _presented || !Visible) return;
+        if (idObject != Native.OBJID_WINDOW || _topmost || _presented || _desktopShown || !Visible) return;
         Native.SetWindowPos(Handle, Native.HWND_BOTTOM, 0, 0, 0, 0, Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
     }
 
@@ -197,7 +245,8 @@ internal sealed class WidgetForm : Form
         Native.SetWindowPos(Handle, value ? Native.HWND_TOPMOST : Native.HWND_NOTOPMOST, 0, 0, 0, 0,
             Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
         if (!value)
-            Native.SetWindowPos(Handle, Native.HWND_BOTTOM, 0, 0, 0, 0, Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
+            Native.SetWindowPos(Handle, _desktopShown ? Native.HWND_TOPMOST : Native.HWND_BOTTOM, 0, 0, 0, 0,
+                Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
     }
 
     /// <summary>
@@ -465,11 +514,23 @@ internal sealed class WidgetForm : Form
             {
                 var pos = Marshal.PtrToStructure<Native.WINDOWPOS>(m.LParam);
                 var changed = false;
-                // A desktop widget sits under ordinary windows even after it is clicked.
-                if (!_topmost && !_presented && (pos.flags & Native.SWP_NOZORDER) == 0)
+                if ((pos.flags & Native.SWP_NOZORDER) == 0)
                 {
-                    pos.hwndInsertAfter = Native.HWND_BOTTOM;
-                    changed = true;
+                    if (_topmost)
+                    {
+                        // External z-order changes (Show Desktop restores windows) can clear
+                        // WS_EX_TOPMOST; put the pinned widget back on top.
+                        pos.hwndInsertAfter = Native.HWND_TOPMOST;
+                        changed = true;
+                    }
+                    else if (!_presented && !_desktopShown)
+                    {
+                        // A desktop widget sits under ordinary windows even after it is clicked.
+                        // While the desktop is raised, leave the dynamic raise alone. When
+                        // raise-on-click is enabled, let the activation raise it instead.
+                        pos.hwndInsertAfter = Native.HWND_BOTTOM;
+                        changed = true;
+                    }
                 }
                 // Only the widget sizes itself. Windows refitting windows around a display mode change
                 // (a remote desktop going full screen and back) can stretch it past the page it clips,
@@ -545,7 +606,14 @@ internal sealed class WidgetForm : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) _controller?.Close();
+        if (disposing)
+        {
+            _desktopStateTimer?.Stop();
+            _desktopStateTimer?.Dispose();
+            _desktopStateTimer = null;
+            _controller?.Close();
+        }
+        if (_foregroundHook != IntPtr.Zero) Native.UnhookWinEvent(_foregroundHook);
         if (_restoredHook != IntPtr.Zero) Native.UnhookWinEvent(_restoredHook);
         base.Dispose(disposing);
     }
