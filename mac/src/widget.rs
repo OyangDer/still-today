@@ -362,11 +362,22 @@ pub fn reveal(app: &AppHandle, window: WebviewWindow, w: f64, h: f64) {
     *state.size.lock().unwrap() = size;
     let compact = state.compact_for(size);
     let mut home = state.home.lock().unwrap();
-    let start = match *home {
+    let saved = *home;
+    let start = match saved {
         // A saved corner is kept on whichever display it is on, pulled onto its desktop if it hangs off.
+        // One whose display has gone, or where one of the system's widgets now is, moves to the grid's place
+        // nearest clear of them: pulled in alone, it sat in the corner over the system's clock.
         Some((x, y)) => {
             let d = desktop_of(&window, area_of(&window, x, y));
-            (x.min(d.right() - size.0).max(d.x), y.min(d.bottom() - size.1).max(d.y))
+            let kept = (x.min(d.right() - size.0).max(d.x), y.min(d.bottom() - size.1).max(d.y));
+            let widgets = system_widgets();
+            if lost(&window, (x, y), compact) || !clear(&Rect { x: kept.0, y: kept.1, w: compact.0, h: compact.1 }, &widgets) {
+                let from = Rect { x: kept.0, y: kept.1, w: size.0, h: size.1 };
+                let work = area_of(&window, from.x + from.w / 2.0, from.y + from.h / 2.0);
+                place(from, size, compact, desktop_of(&window, work), work, &widgets)
+            } else {
+                kept
+            }
         }
         // First run: the primary display's top-right corner, or the place nearest it clear of the
         // system's widgets.
@@ -381,6 +392,9 @@ pub fn reveal(app: &AppHandle, window: WebviewWindow, w: f64, h: f64) {
     *home = Some(start);
     let rect = target(&window, start, size, compact);
     drop(home);
+    if saved.is_some_and(|saved| saved != start) {
+        state.save();
+    }
     // Opened by hand, the widget comes forward, or it would start under whatever is open; at login
     // it goes straight onto the desktop.
     let forward = !state.revealed.swap(true, Ordering::Relaxed) && !std::env::args().any(|a| a == "--autostart");

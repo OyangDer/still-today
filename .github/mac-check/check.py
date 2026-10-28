@@ -359,6 +359,28 @@ stray |= views(probe)
 probe.js("const a = document.querySelector('.toggle.aurora'); if (a && a.getAttribute('aria-checked') !== 'true') a.click(); [...document.querySelectorAll('.theme')].find(b => /跟随系统|System/.test(b.textContent))?.click();")
 check(not stray, "no Windows-only words on the Mac" if MAC else "Windows words (expected on Windows)", "; ".join(sorted(stray)))
 
+# Started again with its saved corner on a display that has gone: it comes up on this one, on the grid,
+# and remembers that. Pulled in alone, it sat in the corner, over the system's clock where there is one.
+if MAC:
+    probe.sock.close()
+    subprocess.run(["pkill", "-f", "target/debug/still-today"], check=False)
+    time.sleep(2)
+    with open(os.path.join(STORE, "window.json"), "w") as f:
+        json.dump({"x": desk["x"] - 500, "y": desk["y"] - 100, "morph": True}, f)
+    subprocess.Popen(["./target/debug/still-today"], stdout=open(os.path.join(SHOTS, "..", "probe-again.log"), "w"),
+                     stderr=subprocess.STDOUT, start_new_session=True)
+    probe = Probe()
+    for _ in range(60):
+        if probe.native("state")["visible"]:
+            break
+        time.sleep(0.5)
+    time.sleep(1)
+    s = probe.native("state")
+    saved = json.load(open(os.path.join(STORE, "window.json")))
+    check(on_grid(s["x"], desk["x"], desk["x"] + desk["w"], s["w"]) and on_grid(s["y"], desk["y"], desk["y"] + desk["h"], s["h"])
+          and near(saved.get("x", -1), s["x"]) and near(saved.get("y", -1), s["y"]),
+          "started with its display gone, it comes up on the grid here", f"{s['x']:.0f},{s['y']:.0f}, window.json {saved}")
+
 failed = results.count(False)
 print(f"\n{len(results) - failed} passed, {failed} failed", flush=True)
 sys.exit(1 if failed and MAC else 0)
