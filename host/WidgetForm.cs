@@ -48,6 +48,7 @@ internal sealed class WidgetForm : Form
     private IntPtr _foregroundHook;
     private System.Windows.Forms.Timer _desktopStateTimer;
     private bool _desktopShown;
+    private DateTime _desktopStateGraceUntil;
 
     public WidgetForm(string dataDir)
     {
@@ -115,8 +116,8 @@ internal sealed class WidgetForm : Form
             _foregroundHook = Native.SetWinEventHook(Native.EVENT_SYSTEM_FOREGROUND, Native.EVENT_SYSTEM_FOREGROUND, IntPtr.Zero,
                 _onForeground, 0, 0, Native.WINEVENT_OUTOFCONTEXT);
             _desktopStateTimer = new System.Windows.Forms.Timer { Interval = 150 };
-            _desktopStateTimer.Tick += (_, _) => UpdateDesktopState();
-            _desktopStateTimer.Start();
+            _desktopStateTimer.Tick += OnDesktopStateTick;
+            StartDesktopStateWatch();
         }
 
         var options = new CoreWebView2EnvironmentOptions { AreBrowserExtensionsEnabled = false };
@@ -197,7 +198,27 @@ internal sealed class WidgetForm : Form
 
     private void OnForegroundChanged(IntPtr hook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint thread, uint time)
     {
-        if (idObject == Native.OBJID_WINDOW) UpdateDesktopState();
+        if (idObject == Native.OBJID_WINDOW) StartDesktopStateWatch();
+    }
+
+    /// <summary>
+    /// The foreground hook already sees Show Desktop start and end. Use it to start a short
+    /// watch, keeping a small grace period after each event for Explorer's z-order work. The
+    /// timer stops itself once the desktop is back down, so no periodic work runs normally.
+    /// </summary>
+    private void StartDesktopStateWatch()
+    {
+        if (_desktopStateTimer == null) return;
+        _desktopStateGraceUntil = DateTime.UtcNow.AddSeconds(1);
+        _desktopStateTimer.Start();
+        UpdateDesktopState();
+    }
+
+    private void OnDesktopStateTick(object sender, EventArgs e)
+    {
+        UpdateDesktopState();
+        if (!_desktopShown && DateTime.UtcNow >= _desktopStateGraceUntil)
+            _desktopStateTimer.Stop();
     }
 
     private void UpdateDesktopState()
@@ -526,8 +547,7 @@ internal sealed class WidgetForm : Form
                     else if (!_presented && !_desktopShown)
                     {
                         // A desktop widget sits under ordinary windows even after it is clicked.
-                        // While the desktop is raised, leave the dynamic raise alone. When
-                        // raise-on-click is enabled, let the activation raise it instead.
+                        // While the desktop is raised, leave the dynamic raise alone.
                         pos.hwndInsertAfter = Native.HWND_BOTTOM;
                         changed = true;
                     }
