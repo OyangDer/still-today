@@ -58,6 +58,11 @@ fn handle(app: &AppHandle, request: &Value) -> Value {
             });
             Value::Null
         }
+        // What unplugging a display leaves: the home corner on a screen that has gone, the window untouched.
+        Some("strand") => {
+            widget::strand(app, request["x"].as_f64().unwrap_or(0.0), request["y"].as_f64().unwrap_or(0.0));
+            Value::Null
+        }
         // What a drop does once the button comes up; a real drag needs a real mouse.
         Some("settle") => {
             widget::settle(app, window);

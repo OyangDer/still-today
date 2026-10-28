@@ -655,6 +655,12 @@ pub(crate) fn settle(app: &AppHandle, window: WebviewWindow) {
     animate(app, window, from, grow(home, size, compact, work, &widgets), now_ms(), GLIDE_MS, GLIDE);
 }
 
+/// For the CI check: the home corner moves to a point the window stays away from, as when its display goes.
+#[cfg(feature = "probe")]
+pub(crate) fn strand(app: &AppHandle, x: f64, y: f64) {
+    *widget(app).home.lock().unwrap() = Some((x, y));
+}
+
 /// A cubic Bézier easing, as CSS writes one: (x1, y1, x2, y2).
 type Curve = (f64, f64, f64, f64);
 

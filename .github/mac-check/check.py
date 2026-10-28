@@ -285,6 +285,24 @@ check(on_grid(s["x"], desk["x"], desk["x"] + desk["w"], s["w"]) and on_grid(s["y
       and near(saved.get("x", -1), s["x"]) and near(saved.get("y", -1), s["y"]),
       f"drop settles on the {STEP}pt grid and is saved", f"{before['x']:.1f},{before['y']:.1f} → {s['x']:.1f},{s['y']:.1f}, window.json {saved}")
 
+# A display unplugged: the home corner was on it, up and to the left of this one, and the window is
+# where the system put it. The card grew onto this display over the system's widgets, then went back to
+# the home corner on no display at all and was gone.
+if MAC:
+    probe.native("strand", x=desk["x"] - 500, y=desk["y"] - 100)
+    probe.js("document.querySelectorAll('[role=tab]')[3].click();")
+    time.sleep(0.9)
+    large = probe.native("state")
+    probe.js("document.querySelectorAll('[role=tab]')[0].click();")
+    time.sleep(0.9)
+    small = probe.native("state")
+    saved = json.load(open(os.path.join(STORE, "window.json")))
+    seen = lambda x, y, w, h: screen["x"] <= x + w / 2 <= screen["x"] + screen["w"] and screen["y"] <= y + h / 2 <= screen["y"] + screen["h"]
+    check(seen(large["x"], large["y"], large["w"], large["h"]) and seen(small["x"], small["y"], small["w"], small["h"])
+          and seen(saved.get("x", -9999), saved.get("y", -9999), small["w"], small["h"]),
+          "a home on a display that went comes back on screen",
+          f"large {large['x']:.0f},{large['y']:.0f}, compact {small['x']:.0f},{small['y']:.0f}, window.json {saved}")
+
 # Keep on top, and back under.
 probe.call("topmost", {"on": True})
 time.sleep(0.4)
