@@ -481,6 +481,7 @@ fn main() {
             if let Some(window) = app.get_webview_window("main") {
                 widget::dress(&window);
                 widget::watch_mission_control(&window);
+                widget::watch_displays(app.handle(), &window);
             }
             shell::menu_bar(app.handle())?;
             shell::init_notifications(app.handle());

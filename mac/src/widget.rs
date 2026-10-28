@@ -256,6 +256,12 @@ fn current(window: &WebviewWindow) -> Option<Rect> {
     Some(Rect { x: p.x as f64 / s, y: p.y as f64 / s, w: z.width as f64 / s, h: z.height as f64 / s })
 }
 
+// Whether the compact card at `home` has its middle on no display's desktop: the display it was on has
+// gone. A card half off an edge is still where the user put it.
+fn lost(window: &WebviewWindow, (x, y): (f64, f64), (w, h): (f64, f64)) -> bool {
+    !work_areas(window).into_iter().any(|a| desktop_of(window, a).contains(x + w / 2.0, y + h / 2.0))
+}
+
 // Where the card shows at `size`, from the home corner: the compact card's top left.
 fn target(window: &WebviewWindow, home: (f64, f64), size: (f64, f64), compact: (f64, f64)) -> Rect {
     let work = area_of(window, home.0, home.1);
@@ -587,7 +593,10 @@ pub fn morph(app: &AppHandle, window: WebviewWindow, w: f64, h: f64, start: f64,
     let Some(home) = *state.home.lock().unwrap() else { return };
     let Some(from) = current(&window) else { return };
     let ms = if state.morph.load(Ordering::Relaxed) { ms } else { 0.0 };
-    animate(app, window.clone(), from, target(&window, home, size, compact), start, ms, MORPH);
+    // A home whose display has gone is made again from where the window is now. Kept, the card grew onto
+    // the display left, over the system's widgets, then went back to the home and off every screen.
+    let to = if lost(&window, home, compact) { rehome(app, &window, from, size) } else { target(&window, home, size, compact) };
+    animate(app, window.clone(), from, to, start, ms, MORPH);
 }
 
 /// The page asks for this when a press lands on anything that is not a control. Once the pointer
@@ -643,17 +652,56 @@ fn apart(a: Option<(f64, f64)>, b: Option<(f64, f64)>) -> bool {
 }
 
 pub(crate) fn settle(app: &AppHandle, window: WebviewWindow) {
-    let state = widget(app);
     let Some(from) = current(&window) else { return };
-    let size = *state.size.lock().unwrap();
+    let size = *widget(app).size.lock().unwrap();
+    let to = rehome(app, &window, from, size);
+    animate(app, window, from, to, now_ms(), GLIDE_MS, GLIDE);
+}
+
+// Makes the home the grid's place for a card at `from` shown at `size`, remembers it, and gives where the
+// card shows from there. Off every display, `from` is on the nearest one's grid.
+fn rehome(app: &AppHandle, window: &WebviewWindow, from: Rect, size: (f64, f64)) -> Rect {
+    let state = widget(app);
     let compact = *state.compact.lock().unwrap();
-    let work = area_of(&window, from.x + from.w / 2.0, from.y + from.h / 2.0);
+    let work = area_of(window, from.x + from.w / 2.0, from.y + from.h / 2.0);
     let widgets = system_widgets();
-    let home = place(from, size, compact, desktop_of(&window, work), work, &widgets);
+    let home = place(from, size, compact, desktop_of(window, work), work, &widgets);
     *state.home.lock().unwrap() = Some(home);
     state.save();
-    animate(app, window, from, grow(home, size, compact, work, &widgets), now_ms(), GLIDE_MS, GLIDE);
+    grow(home, size, compact, work, &widgets)
 }
+
+/// When a display goes, the window may already be on another, the system having moved it, while the home
+/// is still on the one that went; the widget settles from wherever it is. It waits a moment for the
+/// system to move it. A home still on a display stays.
+#[cfg(target_os = "macos")]
+pub fn watch_displays(app: &AppHandle, window: &WebviewWindow) {
+    use block2::RcBlock;
+    use objc2_app_kit::NSApplicationDidChangeScreenParametersNotification;
+    use objc2_foundation::NSNotificationCenter;
+
+    let (app, window) = (app.clone(), window.clone());
+    let changed = RcBlock::new(move |_: std::ptr::NonNull<objc2_foundation::NSNotification>| {
+        let (app, window) = (app.clone(), window.clone());
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(500));
+            let state = widget(&app);
+            let home = *state.home.lock().unwrap();
+            let compact = *state.compact.lock().unwrap();
+            if !state.dragging.load(Ordering::Relaxed) && home.is_some_and(|home| lost(&window, home, compact)) {
+                settle(&app, window);
+            }
+        });
+    });
+    // SAFETY: the block only hands the work to a thread of its own. The observer stays for the app's life.
+    let observer = unsafe {
+        NSNotificationCenter::defaultCenter().addObserverForName_object_queue_usingBlock(Some(NSApplicationDidChangeScreenParametersNotification), None, None, &changed)
+    };
+    std::mem::forget(observer);
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn watch_displays(_app: &AppHandle, _window: &WebviewWindow) {}
 
 /// For the CI check: the home corner moves to a point the window stays away from, as when its display goes.
 #[cfg(feature = "probe")]
