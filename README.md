@@ -4,7 +4,7 @@
 
 只是想看一眼作业，却每次都要打开浏览器、登录、再等手机验证？
 
-Still Today 是一个桌面小组件，Windows 和 Mac 都能用，给学校用 Canvas（海外高校常用的教学平台）的留学生。它把 Canvas 上的作业、截止时间和课程日程放在桌面上，不用打开浏览器，就知道今天要做什么。
+Still Today 是一个桌面小组件，Windows 和 Mac 都能用，给学校用 Canvas（很多大学用的教学平台）的学生。它把 Canvas 上的作业、截止时间和课程日程放在桌面上，不用打开浏览器，就知道今天要做什么。
 
 https://github.com/user-attachments/assets/0310065c-c8b7-49bc-8fc3-10a0d07fedda
 
