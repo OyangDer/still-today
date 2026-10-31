@@ -91,6 +91,7 @@ internal static class Native
     public static extern IntPtr RegisterPowerSettingNotification(IntPtr recipient, ref Guid setting, int flags);
 
     public const uint EVENT_SYSTEM_MINIMIZEEND = 0x0017;
+    public const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
     public const uint WINEVENT_OUTOFCONTEXT = 0x0000, WINEVENT_SKIPOWNPROCESS = 0x0002;
     public const int OBJID_WINDOW = 0;
 
