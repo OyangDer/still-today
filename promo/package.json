@@ -1,0 +1,17 @@
+{
+  "name": "still-today-promo",
+  "private": true,
+  "description": "Still Today 宣传短片：逐帧动画源文件与渲染脚本",
+  "scripts": {
+    "stills": "node stills.js out",
+    "preview": "node render.js out/preview 30 4 77.33 0.5",
+    "render": "node render.js out/final 60 8 77.33 1"
+  },
+  "dependencies": {
+    "@fontsource/long-cang": "^5.3.0",
+    "@fontsource/noto-sans-sc": "^5.3.1"
+  },
+  "devDependencies": {
+    "playwright": "^1.48.0"
+  }
+}
